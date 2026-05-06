@@ -70,29 +70,19 @@ export default function Auth() {
     });
   }, [navigate]);
 
-  // Test accounts that bypass OTP — password-only login
-  const OTP_BYPASS_EMAILS = ["test-admin@galoras.com", "test-coach@galoras.com", "test-customer@galoras.com"];
-
-  // ── LOGIN STEP 1 — enter email + password, send custom OTP via Resend ──
+  // ââ LOGIN STEP 1 â enter email + password, send custom OTP via Resend ââ
   const handleLoginCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
-      const { data, error: pwError } = await supabase.auth.signInWithPassword({
+      // Validate password first (don't complete sign-in yet)
+      const { error: pwError } = await supabase.auth.signInWithPassword({
         email: loginEmail,
         password: loginPassword,
       });
       if (pwError) throw pwError;
 
-      // Test accounts: skip OTP, session is already active
-      if (OTP_BYPASS_EMAILS.includes(loginEmail.toLowerCase())) {
-        const name = data.user?.user_metadata?.full_name || loginEmail.split("@")[0];
-        toast({ title: `Welcome back, ${name}!` });
-        navigate(redirectParam || "/");
-        return;
-      }
-
-      // Password valid — sign out (we'll sign back in after OTP)
+      // Password valid â sign out (we'll sign back in after OTP)
       await supabase.auth.signOut();
 
       // Send custom OTP via our edge function + Resend
@@ -107,7 +97,7 @@ export default function Auth() {
     }
   };
 
-  // ── LOGIN STEP 2 — verify custom OTP + sign in ────────────────────────
+  // ââ LOGIN STEP 2 â verify custom OTP + sign in ââââââââââââââââââââââââ
   const handleLoginOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -151,7 +141,7 @@ export default function Auth() {
     }
   };
 
-  // ── SIGNUP STEP 1 — send OTP via custom Resend edge function ────────────
+  // ââ SIGNUP STEP 1 â send OTP via custom Resend edge function ââââââââââââ
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -185,7 +175,7 @@ export default function Auth() {
     }
   };
 
-  // ── SIGNUP STEP 2 — verify OTP via custom edge function ───────────────
+  // ââ SIGNUP STEP 2 â verify OTP via custom edge function âââââââââââââââ
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -200,7 +190,7 @@ export default function Auth() {
     }
   };
 
-  // ── SIGNUP STEP 3 — set name + password ───────────────────────────────────
+  // ââ SIGNUP STEP 3 â set name + password âââââââââââââââââââââââââââââââââââ
   const handleComplete = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password.length < 6) {
@@ -209,7 +199,7 @@ export default function Auth() {
     }
     setIsLoading(true);
     try {
-      // Complete signup via edge function — sets password and signs in
+      // Complete signup via edge function â sets password and signs in
       const signupResult = await callFunction("complete-signup", {
         email: signupEmail, password, fullName, phone: phoneNumber ? `${countryCode}${phoneNumber.replace(/\D/g, "")}` : null,
       });
@@ -236,7 +226,7 @@ export default function Auth() {
     }
   };
 
-  // ── RESET PASSWORD STEP 1 — send code ───────────────────────────────────
+  // ââ RESET PASSWORD STEP 1 â send code âââââââââââââââââââââââââââââââââââ
   const handleResetSendCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -251,13 +241,13 @@ export default function Auth() {
     }
   };
 
-  // ── RESET PASSWORD STEP 2 — verify code ────────────────────────────────
+  // ââ RESET PASSWORD STEP 2 â verify code ââââââââââââââââââââââââââââââââ
   const handleResetVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setResetStep("newpass");
   };
 
-  // ── RESET PASSWORD STEP 3 — set new password ──────────────────────────
+  // ââ RESET PASSWORD STEP 3 â set new password ââââââââââââââââââââââââââ
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword.length < 6) {
@@ -299,7 +289,7 @@ export default function Auth() {
         <div className="container-wide relative z-10 py-12 lg:py-0">
           <div className="grid lg:grid-cols-2 gap-8 lg:gap-16 items-center min-h-[calc(100vh-80px)]">
 
-            {/* ── Form side ── */}
+            {/* ââ Form side ââ */}
             <div className="order-2 lg:order-1 max-w-md mx-auto lg:mx-0 w-full">
               <div className="text-center lg:text-left mb-8">
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-medium mb-4">
@@ -349,7 +339,7 @@ export default function Auth() {
                 ))}
               </div>
 
-              {/* ── LOGIN STEP 1: email + password ── */}
+              {/* ââ LOGIN STEP 1: email + password ââ */}
               {tab === "login" && loginStep === "credentials" && (
                 <form onSubmit={handleLoginCredentials} className="space-y-4">
                   <div>
@@ -364,7 +354,7 @@ export default function Auth() {
                     <Label htmlFor="login-password" className="mb-1.5 block">Password</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input id="login-password" type="password" required className="pl-10" placeholder="••••••••"
+                      <Input id="login-password" type="password" required className="pl-10" placeholder="â¢â¢â¢â¢â¢â¢â¢â¢"
                         value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />
                     </div>
                   </div>
@@ -379,7 +369,7 @@ export default function Auth() {
                 </form>
               )}
 
-              {/* ── LOGIN STEP 2: OTP verification ── */}
+              {/* ââ LOGIN STEP 2: OTP verification ââ */}
               {tab === "login" && loginStep === "otp" && (
                 <form onSubmit={handleLoginOtp} className="space-y-4">
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/10 border border-primary/20 mb-2">
@@ -416,7 +406,7 @@ export default function Auth() {
                 </form>
               )}
 
-              {/* ── SIGNUP STEP 1: email ── */}
+              {/* ââ SIGNUP STEP 1: email ââ */}
               {tab === "signup" && signupStep === "email" && (
                 <form onSubmit={handleSendOtp} className="space-y-4">
                   <div>
@@ -433,7 +423,7 @@ export default function Auth() {
                 </form>
               )}
 
-              {/* ── SIGNUP STEP 2: OTP ── */}
+              {/* ââ SIGNUP STEP 2: OTP ââ */}
               {tab === "signup" && signupStep === "otp" && (
                 <form onSubmit={handleVerifyOtp} className="space-y-4">
                   <div>
@@ -466,7 +456,7 @@ export default function Auth() {
                 </form>
               )}
 
-              {/* ── SIGNUP STEP 3: complete ── */}
+              {/* ââ SIGNUP STEP 3: complete ââ */}
               {tab === "signup" && signupStep === "complete" && (
                 <form onSubmit={handleComplete} className="space-y-4">
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 mb-2">
@@ -528,7 +518,7 @@ export default function Auth() {
                       <Input id="phone" type="tel" className="flex-1" placeholder="(555) 000-0000"
                         value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">For SMS verification — we'll text you a code to confirm.</p>
+                    <p className="text-xs text-muted-foreground mt-1">For SMS verification â we'll text you a code to confirm.</p>
                   </div>
                   <LegalConsentCheckboxes context="user_signup" onChange={handleConsentChange} variant="light" />
                   <Button type="submit" className="w-full bg-primary text-primary-foreground hover:bg-primary/90" disabled={isLoading || !consentValid}>
@@ -537,7 +527,7 @@ export default function Auth() {
                 </form>
               )}
 
-              {/* ── RESET PASSWORD STEP 1: enter email ── */}
+              {/* ââ RESET PASSWORD STEP 1: enter email ââ */}
               {tab === "reset" && resetStep === "email" && (
                 <form onSubmit={handleResetSendCode} className="space-y-4">
                   <div>
@@ -559,7 +549,7 @@ export default function Auth() {
                 </form>
               )}
 
-              {/* ── RESET PASSWORD STEP 2: enter code ── */}
+              {/* ââ RESET PASSWORD STEP 2: enter code ââ */}
               {tab === "reset" && resetStep === "code" && (
                 <form onSubmit={handleResetVerifyCode} className="space-y-4">
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/10 border border-primary/20 mb-2">
@@ -582,7 +572,7 @@ export default function Auth() {
                 </form>
               )}
 
-              {/* ── RESET PASSWORD STEP 3: new password ── */}
+              {/* ââ RESET PASSWORD STEP 3: new password ââ */}
               {tab === "reset" && resetStep === "newpass" && (
                 <form onSubmit={handleResetPassword} className="space-y-4">
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 mb-2">
@@ -624,7 +614,7 @@ export default function Auth() {
               )}
             </div>
 
-            {/* ── Image side ── */}
+            {/* ââ Image side ââ */}
             <div className="order-1 lg:order-2 relative hidden lg:block">
               <div className="relative h-[600px] rounded-2xl overflow-hidden">
                 <div className="absolute inset-0 bg-cover bg-center"
