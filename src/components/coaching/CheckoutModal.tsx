@@ -6,7 +6,7 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { Stripe } from "@stripe/stripe-js";
-import {
+import 
   Dialog,
   DialogContent,
   DialogHeader,
@@ -170,7 +170,7 @@ export function CheckoutModal({
 }: CheckoutModalProps) {
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Complete Your Purchase</DialogTitle>
           <DialogDescription>
