@@ -6,7 +6,7 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { Stripe } from "@stripe/stripe-js";
-import 
+import {
   Dialog,
   DialogContent,
   DialogHeader,
