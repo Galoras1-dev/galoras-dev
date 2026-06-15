@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Elements,
   PaymentElement,
@@ -14,7 +15,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, XCircle } from "lucide-react";
 import { LegalConsentCheckboxes } from "@/components/legal/LegalConsentCheckboxes";
 import { recordAgreements } from "@/lib/legal";
 
@@ -34,10 +35,10 @@ function CheckoutForm({
   onCancel,
 }: CheckoutFormProps) {
   const stripe = useStripe();
+  const navigate = useNavigate();
   const elements = useElements();
   const [paying, setPaying] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
-  const [succeeded, setSucceeded] = useState(false);
   const [consentValid, setConsentValid] = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
   const handleConsentChange = useCallback((valid: boolean, marketing: boolean) => {
@@ -58,7 +59,7 @@ function CheckoutForm({
     setPaying(true);
     setPayError(null);
 
-    const { error } = await stripe.confirmPayment({
+    const { error, paymentIntent } = await stripe.confirmPayment({
       elements,
       confirmParams: {
         return_url: `${window.location.origin}/booking-success`,
@@ -77,23 +78,12 @@ function CheckoutForm({
       if (marketingOptIn) types.push("marketing_opt_in");
       await recordAgreements({ context: "session_checkout", agreementTypes: types, marketingOptIn });
 
-      setSucceeded(true);
+      navigate(`/booking-success?payment_intent=${paymentIntent?.id ?? ""}`);
       setPaying(false);
       setTimeout(() => onSuccess(), 1500);
     }
   };
 
-  if (succeeded) {
-    return (
-      <div className="flex flex-col items-center gap-4 py-8">
-        <CheckCircle2 className="h-14 w-14 text-green-500" />
-        <p className="text-lg font-semibold">Payment successful!</p>
-        <p className="text-sm text-muted-foreground">
-          Your booking has been confirmed. Check your email for details.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
