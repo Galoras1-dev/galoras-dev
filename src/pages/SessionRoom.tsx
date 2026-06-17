@@ -50,13 +50,15 @@ export default function SessionRoom() {
     return (
       <div style={{ display: "flex", height: "100vh", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: 24, textAlign: "center" }}>
         <h2>Session unavailable</h2>
-        <p>{error || "We couldn’t open this session room."}</p>
+        <p>{error || "We couldn't open this session room."}</p>
         <p style={{ opacity: 0.7, fontSize: 14 }}>
-          Make sure you’re logged in with the account that booked or hosts this session.
+          Make sure you're logged in with the account that booked or hosts this session.
         </p>
       </div>
     );
   }
+
+  const embedUrl = `${url}${url.includes("?") ? "&" : "?"}skipMediaPermissionPrompt`;
 
   return (
     <div style={{ position: "fixed", inset: 0 }}>
@@ -67,7 +69,7 @@ export default function SessionRoom() {
       )}
       <iframe
         title="Galoras session"
-        src={url}
+        src={embedUrl}
         allow="camera; microphone; fullscreen; speaker; display-capture; autoplay"
         allowFullScreen
         style={{ width: "100%", height: "100%", border: 0 }}
