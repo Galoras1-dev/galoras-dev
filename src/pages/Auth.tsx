@@ -132,8 +132,17 @@ export default function Auth() {
           }
         } catch { /* ignore */ }
       }
-
-      navigate(redirectParam || "/");
+        // Role-aware landing: coach -> cockpit, member -> coachee home; ?redirect wins.
+              let dest = "/dashboard";
+              if (uid) {
+                          const { data: prof } = await supabase
+                            .from("profiles")
+                            .select("user_type")
+                            .eq("id", uid)
+                            .maybeSingle();
+                          if (prof?.user_type === "coach") dest = "/coach-dashboard";
+              }
+              navigate(redirectParam || dest);
     } catch (err: any) {
       toast({ title: "Invalid code", description: err.message, variant: "destructive" });
     } finally {
