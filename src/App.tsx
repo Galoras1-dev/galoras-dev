@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { usePageTracker } from "@/ooks/usePageTracker";
+import { usePageTracker } fom "@/hooks/usePageTracker";
 
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
