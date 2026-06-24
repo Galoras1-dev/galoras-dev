@@ -75,7 +75,6 @@ export default function Apply() {
     leadership_experience_years: "",
     current_role: "",
     coaching_experience_level: "",
-    booking_url: "",
   });
 
   const backgroundConfig = formData.coach_background
@@ -117,12 +116,6 @@ export default function Apply() {
       const coach_background_detail = backgroundConfig?.field === "detail" ? formData.coach_background_detail : null;
       const certification_interest = backgroundConfig?.field === "certification" ? formData.certification_interest : null;
 
-      const normalizedBooking = normalizeUrl(formData.booking_url);
-
-      if (normalizedBooking && !/^https?:\/\/[^\s]+\.[^\s]+/i.test(normalizedBooking)) {
-        throw new Error("Please enter a valid booking URL.");
-      }
-
       const payload = {
         id: applicationId,
         full_name: formData.full_name,
@@ -140,7 +133,6 @@ export default function Apply() {
         current_role: formData.current_role || null,
         coaching_experience_level: formData.coaching_experience_level,
         coaching_philosophy: formData.coaching_philosophy || null,
-        booking_url: normalizedBooking,
         nda_accepted: ndaAccepted,
         nda_accepted_at: ndaAccepted ? new Date().toISOString() : null,
       };
@@ -257,17 +249,6 @@ export default function Apply() {
                     <div className="space-y-2">
                       <Label htmlFor="website">Website / Portfolio</Label>
                       <Input id="website" type="url" value={formData.website_url} onChange={(e) => setFormData({ ...formData, website_url: e.target.value })} placeholder="https://yourwebsite.com" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="booking_url">Booking Link (e.g., Calendly)</Label>
-                      <Input
-                        id="booking_url"
-                        type="text"
-                        value={formData.booking_url}
-                        onChange={(e) => setFormData({ ...formData, booking_url: e.target.value })}
-                        placeholder="https://calendly.com/yourname"
-                      />
-                      <p className="text-xs text-muted-foreground">Optional — enter your Calendly or booking page (we'll add https:// if missing).</p>
                     </div>
                   </div>
 
