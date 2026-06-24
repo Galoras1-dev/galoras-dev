@@ -20,8 +20,8 @@ const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = STRIPE_KEY ? loadStripe(STRIPE_KEY) : null;
 
 const TIER_LABELS: Record<string, { name: string; price: string }> = {
-  pro:    { name: "Pro",    price: "$49/month" },
-  elite:  { name: "Elite", price: "$99/month" },
+  pro: { name: "Pro", price: "$49/month" },
+  elite: { name: "Elite", price: "$99/month" },
   master: { name: "Master",price: "$197/month" },
 };
 
@@ -240,9 +240,9 @@ export function CoachTierPayment({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="relative z-10 w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl overflow-hidden max-h-[90vh]">
         <div className="h-1 bg-gradient-to-r from-primary to-sky-400" />
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto max-h-[calc(90vh-4px)]">
           {registrationLink ? (
             <SuccessState registrationLink={registrationLink} />
           ) : loading ? (
