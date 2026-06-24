@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { usePageTracker } from "@/hooks/usePageTracker";
+import { usePageTracker } from "@/ooks/usePageTracker";
 
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -55,7 +55,6 @@ import Terms from "./pages/legal/Terms";
 import Privacy from "./pages/legal/Privacy";
 import CookiePolicy from "./pages/legal/CookiePolicy";
 import CoachAgreement from "./pages/legal/CoachAgreement";
-import DataProcessingAgreement from "./pages/legal/DataProcessingAgreement";
 
 const queryClient = new QueryClient();
 
@@ -271,8 +270,6 @@ function AppRoutes() {
           {/* Legal Routes */}
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
-          <Route path="/cookies" element={<CookiePolicy />} />
-          <Route path="/data-processing" element={<DataProcessingAgreement />} />
           <Route path="/coach-agreement" element={<CoachAgreement />} />
 
           {/* Always last */}
