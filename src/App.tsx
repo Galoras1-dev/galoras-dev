@@ -33,6 +33,11 @@ import SubscriptionSuccess from "./pages/SubscriptionSuccess";
 import Onboarding from "./pages/Onboarding";
 import CoachSignup from "./pages/CoachSignup";
 
+// Labs & Business
+import Labs from "./pages/Labs";
+import LabsArticle from "./pages/LabsArticle";
+import SportOfBusiness from "./pages/business/SportOfBusiness";
+
 // Admin
 import ImageGenerator from "./pages/admin/ImageGenerator";
 import CoachCutoutManager from "./pages/admin/CoachCutoutManager";
@@ -48,9 +53,9 @@ import CompleteRegistration from "./pages/CompleteRegistration";
 // Legal pages
 import Terms from "./pages/legal/Terms";
 import Privacy from "./pages/legal/Privacy";
-import Payments from "./pages/legal/Payments";
-import CoachAgreement from "./pages/legal/CoachAgreement";
 import CookiePolicy from "./pages/legal/CookiePolicy";
+import CoachAgreement from "./pages/legal/CoachAgreement";
+import DataProcessingAgreement from "./pages/legal/DataProcessingAgreement";
 
 const queryClient = new QueryClient();
 
@@ -85,7 +90,7 @@ function ProtectedRoute({ children, requireAdmin = false }: { children: React.Re
         setState("allowed");
       }
     })();
-  }, [requireAdmin]);
+  }, []);
 
   if (state === "loading") return null;
   if (state === "denied") return <Navigate to="/login" replace />;
@@ -118,14 +123,18 @@ function AppRoutes() {
           <Route path="/coaching/compare" element={<PaymentGate><CoachCompare /></PaymentGate>} />
           <Route path="/coaching/why" element={<WhyCoaching />} />
           <Route path="/coaching/onboarding" element={<CoachOnboarding />} />
-          <Route path="/coaching/:coachId" element={<CoachProfile />} />
-          <Route path="/coach/:slug" element={<CoachProfile />} />
+          <Route path="/coach/:slug" element={<PaymentGate><CoachProfile /></PaymentGate>} />
           <Route path="/coach/onboarding" element={<CoachOnboardingRedirect />} />
           <Route path="/onboard/:shortId" element={<OnboardRedirect />} />
 
+          {/* Labs & Business Routes */}
+          <Route path="/labs" element={<Labs />} />
+          <Route path="/labs/:slug" element={<LabsArticle />} />
+          <Route path="/business/sport-of-business" element={<SportOfBusiness />} />
+
           {/* Core Routes */}
           <Route path="/apply" element={<Apply />} />
-      <Route path="/session/:bookingId" element={<SessionRoom />} />
+          <Route path="/session/:bookingId" element={<SessionRoom />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/login" element={<Auth />} />
@@ -143,7 +152,7 @@ function AppRoutes() {
           <Route path="/booking-success" element={<BookingSuccess />} />
           <Route path="/subscription-success" element={<SubscriptionSuccess />} />
 
-          {/* Dashboard Routes */}
+          {/* Dashboards */}
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route
             path="/coach-dashboard"
@@ -180,7 +189,7 @@ function AppRoutes() {
 
           {/* Admin Routes */}
           <Route
-            path="/admin/images"
+            path="/admin/image-generator"
             element={
               <PaymentGate>
                 <ProtectedRoute requireAdmin>
@@ -263,8 +272,8 @@ function AppRoutes() {
           <Route path="/terms" element={<Terms />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/cookies" element={<CookiePolicy />} />
-          <Route path="/legal/payments" element={<Payments />} />
-          <Route path="/legal/coach-agreement" element={<CoachAgreement />} />
+          <Route path="/data-processing" element={<DataProcessingAgreement />} />
+          <Route path="/coach-agreement" element={<CoachAgreement />} />
 
           {/* Always last */}
           <Route path="*" element={<NotFound />} />
