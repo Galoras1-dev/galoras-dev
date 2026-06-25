@@ -32,6 +32,8 @@ const navItems = [
       { name: "Why Coaching", href: "/coaching/why", description: "The power of coaching" },
     ],
   },
+  { name: "Leadership Labs", href: "/labs" },
+  { name: "Sport of Business", href: "/business/sport-of-business" },
   { name: "About", href: "/about" },
 ];
 
