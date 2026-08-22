@@ -10,6 +10,7 @@ interface MySession {
   id: string;
   booking_id: string;
   coach_id: string;
+  coach_name?: string;
   scheduled_at: string | null;
   status: string;
   duration_minutes: number;
@@ -67,7 +68,10 @@ export function MyUpcomingSessions() {
               className="flex items-center justify-between gap-4 rounded-lg border p-3"
             >
               <div className="min-w-0">
-                <div className="font-medium">
+                <div className="font-medium truncate">
+                  {s.coach_name ?? 'Your Coach'}
+                </div>
+                <div className="text-sm">
                   {s.scheduled_at
                     ? format(parseISO(s.scheduled_at), "EEE d MMM yyyy 'at' h:mm a")
                     : 'Time to be set'}
