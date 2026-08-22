@@ -10,9 +10,11 @@ import { Calendar, Video } from 'lucide-react';
 interface UpcomingSession {
   id: string;
   booking_id: string;
+  client_id: string | null;
   scheduled_at: string | null;
   status: string;
   duration_minutes: number;
+  client_name?: string;
 }
 
 export function CoachUpcomingSessions() {
@@ -28,64 +30,21 @@ export function CoachUpcomingSessions() {
       // filter is needed here.
       const { data, error } = await supabase
         .from('sessions')
-        .select('id, booking_id, scheduled_at, status, duration_minutes')
+        .select('id, booking_id, client_id, scheduled_at, status, duration_minutes')
         .eq('status', 'scheduled')
         .not('scheduled_at', 'is', null)
         .order('scheduled_at', { ascending: true });
 
-      if (active) {
-        if (!error && data) setSessions(data as UpcomingSession[]);
+      if (!active) return;
+
+      if (error || !data) {
         setLoading(false);
+        return;
       }
-    })();
 
-    return () => {
-      active = false;
-    };
-  }, []);
+      const rows = data as UpcomingSession[];
 
-  return (
-    <Card className="mb-6">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Calendar className="h-5 w-5" />
-          Upcoming sessions
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {loading ? (
-          <Skeleton className="h-16 w-full" />
-        ) : sessions.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No scheduled sessions yet. They'll appear here once a coachee books and
-            picks a time.
-          </p>
-        ) : (
-          <ul className="space-y-3">
-            {sessions.map((s) => (
-              <li
-                key={s.id}
-                className="flex items-center justify-between gap-4 rounded-lg border p-3"
-              >
-                <div className="min-w-0">
-                  <div className="font-medium">
-                    {s.scheduled_at
-                      ? format(parseISO(s.scheduled_at), "EEE d MMM yyyy 'at' h:mm a")
-                      : 'Time to be set'}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {s.duration_minutes} min
-                  </div>
-                </div>
-                <Button size="sm" onClick={() => navigate(`/session/${s.booking_id}`)}>
-                  <Video className="h-4 w-4 mr-2" />
-                  Join
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
+      // Look up the coachee's name so the coach can see who they are meeting,
+      // rather than only a date and time
+
+     
