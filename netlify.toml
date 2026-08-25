@@ -5,6 +5,24 @@
 [build.environment]
   SECRETS_SCAN_OMIT_KEYS = "VITE_STRIPE_PUBLISHABLE_KEY"
 
+# Short links for the UAT feedback forms.
+# These MUST stay above the SPA catch-all below - Netlify matches in order,
+# and "/*" would otherwise swallow them and serve index.html instead.
+[[redirects]]
+  from = "/checkin"
+  to = "https://forms.cloud.microsoft/r/qPqKrAHdxL"
+  status = 302
+
+[[redirects]]
+  from = "/feedback-coach"
+  to = "https://forms.cloud.microsoft/r/NgXwe0MCwi"
+  status = 302
+
+[[redirects]]
+  from = "/feedback-coachee"
+  to = "https://forms.cloud.microsoft/r/HGb991uQBz"
+  status = 302
+
 # SPA routing - all routes fall back to index.html
 [[redirects]]
   from = "/*"
