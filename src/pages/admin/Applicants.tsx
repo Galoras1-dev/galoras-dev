@@ -56,6 +56,8 @@ type Application = {
   availability_tag: string | null;
   enterprise_tags: string[] | null;
   credential_tags: string[] | null;
+  outcome_tags: string[] | null;
+  format_tags: string[] | null;
 };
 
 type PortfolioCount = { tier: string; count: number };
@@ -67,8 +69,10 @@ type VocabTag = { id: string; tag_key: string; tag_label: string; tag_family: st
 // into coach_tag_map rows, so what is set here is what the coach is matched on.
 const TAG_FAMILIES: { family: string; column: string; label: string; single?: boolean }[] = [
   { family: "specialty",    column: "specialty_tags",   label: "Specialties" },
+  { family: "outcome",      column: "outcome_tags",     label: "Outcomes they deliver" },
   { family: "audience",     column: "audience_tags",    label: "Audience" },
   { family: "style",        column: "style_tags",       label: "Coaching style" },
+  { family: "format",       column: "format_tags",      label: "Format" },
   { family: "industry",     column: "industry_tags",    label: "Industry" },
   { family: "credential",   column: "credential_tags",  label: "Credentials" },
   { family: "enterprise",   column: "enterprise_tags",  label: "Enterprise offering" },
