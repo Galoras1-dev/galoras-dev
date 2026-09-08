@@ -9,7 +9,7 @@ import {
 import {
   CheckCircle2, XCircle, RefreshCw, Clock, User,
   Linkedin, Globe, Mail, Phone, Loader2, Sparkles, Zap,
-  AlertTriangle, TrendingUp,
+  AlertTriangle, TrendingUp, Tags, Save,
 } from "lucide-react";
 
 type FitDimension = { score: number; note: string };
@@ -49,9 +49,31 @@ type Application = {
   fit_score_dimensions: FitDimensions | null;
   created_at: string | null;
   user_id?: string | null;
+  specialty_tags: string[] | null;
+  audience_tags: string[] | null;
+  style_tags: string[] | null;
+  industry_tags: string[] | null;
+  availability_tag: string | null;
+  enterprise_tags: string[] | null;
+  credential_tags: string[] | null;
 };
 
 type PortfolioCount = { tier: string; count: number };
+
+type VocabTag = { id: string; tag_key: string; tag_label: string; tag_family: string };
+
+// Tag families the approval flow can write, mapped to their column on
+// coach_applications. approve-coach reads exactly these columns and turns them
+// into coach_tag_map rows, so what is set here is what the coach is matched on.
+const TAG_FAMILIES: { family: string; column: string; label: string; single?: boolean }[] = [
+  { family: "specialty",    column: "specialty_tags",   label: "Specialties" },
+  { family: "audience",     column: "audience_tags",    label: "Audience" },
+  { family: "style",        column: "style_tags",       label: "Coaching style" },
+  { family: "industry",     column: "industry_tags",    label: "Industry" },
+  { family: "credential",   column: "credential_tags",  label: "Credentials" },
+  { family: "enterprise",   column: "enterprise_tags",  label: "Enterprise offering" },
+  { family: "availability", column: "availability_tag", label: "Availability", single: true },
+];
 
 const STATUS_BADGE: Record<string, { label: string; color: string }> = {
   pending:            { label: "Pending",        color: "bg-zinc-700/60 text-zinc-300 border-zinc-600" },
@@ -90,12 +112,69 @@ export default function Applicants() {
   const [fitScore, setFitScore] = useState(0);
   const [portfolio, setPortfolio] = useState<PortfolioCount[]>([]);
 
+  // ── Tag review ─────────────────────────────────────────────────────────────
+  const [vocab, setVocab] = useState<VocabTag[]>([]);
+  const [tagSel, setTagSel] = useState<Record<string, string[]>>({});
+  const [tagsDirty, setTagsDirty] = useState(false);
+  const [savingTags, setSavingTags] = useState(false);
+
+  const loadTagsFor = (app: Application) => {
+    const next: Record<string, string[]> = {};
+    TAG_FAMILIES.forEach(({ column, single }) => {
+      const raw = (app as any)[column];
+      next[column] = single ? (raw ? [raw as string] : []) : ((raw as string[]) ?? []);
+    });
+    setTagSel(next);
+    setTagsDirty(false);
+  };
+
+  const toggleTag = (column: string, tagKey: string, single?: boolean) => {
+    setTagSel((prev) => {
+      const current = prev[column] ?? [];
+      const next = single
+        ? (current[0] === tagKey ? [] : [tagKey])
+        : current.includes(tagKey)
+          ? current.filter((k) => k !== tagKey)
+          : [...current, tagKey];
+      return { ...prev, [column]: next };
+    });
+    setTagsDirty(true);
+  };
+
+  const saveTags = async () => {
+    if (!selected) return;
+    setSavingTags(true);
+    const payload: Record<string, any> = {};
+    TAG_FAMILIES.forEach(({ column, single }) => {
+      const vals = tagSel[column] ?? [];
+      payload[column] = single ? (vals[0] ?? null) : vals;
+    });
+    const { error } = await supabase
+      .from("coach_applications")
+      .update(payload as any)
+      .eq("id", selected.id);
+    setSavingTags(false);
+    if (error) {
+      toast({ title: "Could not save tags", description: error.message, variant: "destructive" });
+      return;
+    }
+    setTagsDirty(false);
+    toast({ title: "Tags saved", description: "These are what the coach will be matched on." });
+    fetchAll();
+  };
+
+  const totalSelected = Object.values(tagSel).reduce((n, arr) => n + arr.length, 0);
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
-    const [{ data: apps }, { data: coaches }] = await Promise.all([
+    const [{ data: apps }, { data: coaches }, { data: tagRows }] = await Promise.all([
       supabase.from("coach_applications").select("*").order("created_at", { ascending: false }),
       supabase.from("coaches").select("tier").eq("lifecycle_status", "published"),
+      supabase.from("tags").select("id, tag_key, tag_label, tag_family")
+        .eq("is_active", true).order("tag_family").order("display_order"),
     ]);
+
+    setVocab((tagRows as VocabTag[]) ?? []);
 
     const rows = (apps as unknown as Application[]) ?? [];
     setApplications(rows);
@@ -103,6 +182,7 @@ export default function Applicants() {
       setSelected(rows[0]);
       setFitScore(rows[0].fit_score ?? 0);
       setDecisionNotes(rows[0].reviewer_notes ?? "");
+      loadTagsFor(rows[0]);
     }
 
     const counts: Record<string, number> = {};
@@ -120,6 +200,7 @@ export default function Applicants() {
     setSelected(app);
     setFitScore(app.fit_score ?? 0);
     setDecisionNotes(app.reviewer_notes ?? "");
+    loadTagsFor(app);
   };
 
   const saveDraft = async () => {
@@ -148,6 +229,22 @@ export default function Applicants() {
     if (!selected) return;
     if (action !== "approved" && !decisionNotes.trim()) {
       toast({ title: "Notes required", description: "Please provide a reason before rejecting or requesting revision.", variant: "destructive" });
+      return;
+    }
+    if (action === "approved" && tagsDirty) {
+      toast({
+        title: "Unsaved tags",
+        description: "Save the match tags first, or the coach will be approved with the old ones.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (action === "approved" && totalSelected === 0) {
+      toast({
+        title: "No match tags set",
+        description: "This coach would be invisible to search and matching. Set their tags before approving.",
+        variant: "destructive",
+      });
       return;
     }
     setSaving(true);
@@ -561,6 +658,97 @@ export default function Applicants() {
                 </div>
               </div>
             </div>
+
+            {/* ── TAG REVIEW ── */}
+            {selected && (
+              <div className="rounded-xl border border-[#1e3a5f] bg-[#0d1f35] p-5">
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <Tags className="h-4 w-4 text-amber-400" />
+                    <h3 className="text-sm font-black text-white uppercase tracking-widest">
+                      Match Tags
+                    </h3>
+                    <span className="text-xs text-slate-500">
+                      {totalSelected} selected
+                    </span>
+                  </div>
+                  <button
+                    onClick={saveTags}
+                    disabled={savingTags || !tagsDirty}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors ${
+                      tagsDirty
+                        ? "bg-amber-500 text-[#0a1628] hover:bg-amber-400"
+                        : "bg-[#1a2f4a] text-slate-600 cursor-not-allowed"
+                    }`}
+                  >
+                    {savingTags
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Save className="h-3.5 w-3.5" />}
+                    {tagsDirty ? "Save tags" : "Saved"}
+                  </button>
+                </div>
+
+                <p className="text-xs text-slate-500 mb-4">
+                  These decide who this coach is surfaced to in search and matching.
+                  What the coach chose is pre-selected. Correct it before approving.
+                </p>
+
+                {totalSelected === 0 && (
+                  <div className="flex items-center gap-2 px-3 py-2 mb-4 rounded-lg bg-red-950/50 border border-red-900/60 text-xs text-red-300">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    No tags set. If approved now this coach will not appear under any
+                    filter and will never be matched to a coachee.
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  {TAG_FAMILIES.map(({ family, column, label, single }) => {
+                    const options = vocab.filter((t) => t.tag_family === family);
+                    if (options.length === 0) return null;
+                    const chosen = tagSel[column] ?? [];
+                    return (
+                      <div key={column}>
+                        <div className="flex items-baseline gap-2 mb-2">
+                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                            {label}
+                          </p>
+                          {single && (
+                            <span className="text-[10px] text-slate-600">pick one</span>
+                          )}
+                          {chosen.length === 0 && (
+                            <span className="text-[10px] text-amber-500/70">none set</span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {options.map((t) => {
+                            const active = chosen.includes(t.tag_key);
+                            return (
+                              <button
+                                key={t.id}
+                                onClick={() => toggleTag(column, t.tag_key, single)}
+                                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                                  active
+                                    ? "bg-amber-500/15 border-amber-500/60 text-amber-300 font-semibold"
+                                    : "bg-[#0a1628] border-[#1e3a5f] text-slate-500 hover:border-[#2a4a6f] hover:text-slate-300"
+                                }`}
+                              >
+                                {t.tag_label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {tagsDirty && (
+                  <p className="mt-4 text-xs text-amber-400/80">
+                    Unsaved changes. Save before approving, or they will be lost.
+                  </p>
+                )}
+              </div>
+            )}
 
           </div>
         )}
