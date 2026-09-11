@@ -18,6 +18,10 @@ const TIER_LABELS: Record<string, string> = {
   master: "Master",
 };
 
+// Founding period: coaches are free until January. Billing on approval stays OFF
+// until this is explicitly set to "true" in Supabase → Edge Functions → Secrets.
+const BILL_ON_APPROVAL = Deno.env.get("BILL_ON_APPROVAL") === "true";
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -83,50 +87,59 @@ Deno.serve(async (req) => {
     const tier = reg.selected_tier ?? "pro";
     const amountCents = TIER_PRICES[tier] ?? 4900;
 
-    let chargeResult = null;
+    let chargeResult: Record<string, unknown> | null = null;
 
-    // Only charge if payment method is saved
-    if (reg.stripe_customer_id && reg.stripe_payment_method_id) {
-      // Attach payment method to customer (in case it's not already)
+    // ── Billing ───────────────────────────────────────────────────────────────
+    // Approval NEVER fails because of billing. During the founding period no
+    // subscription is created at all. When BILL_ON_APPROVAL is switched on, a
+    // Price is created first and referenced by id — subscriptions.create does
+    // not accept product_data inline, which is what used to throw:
+    //   "Received unknown parameter: items[0][price_data][product_data]"
+    if (BILL_ON_APPROVAL && reg.stripe_customer_id && reg.stripe_payment_method_id) {
       try {
-        await stripe.paymentMethods.attach(reg.stripe_payment_method_id, {
-          customer: reg.stripe_customer_id,
+        try {
+          await stripe.paymentMethods.attach(reg.stripe_payment_method_id, {
+            customer: reg.stripe_customer_id,
+          });
+        } catch (_) { /* already attached */ }
+
+        await stripe.customers.update(reg.stripe_customer_id, {
+          invoice_settings: { default_payment_method: reg.stripe_payment_method_id },
         });
-      } catch (_) { /* already attached */ }
 
-      // Set as default
-      await stripe.customers.update(reg.stripe_customer_id, {
-        invoice_settings: { default_payment_method: reg.stripe_payment_method_id },
-      });
+        const price = await stripe.prices.create({
+          currency: "usd",
+          unit_amount: amountCents,
+          recurring: { interval: "month" },
+          product_data: { name: `Galoras ${TIER_LABELS[tier]} Coach Subscription` },
+        });
 
-      // Create subscription (monthly recurring)
-      const subscription = await stripe.subscriptions.create({
-        customer: reg.stripe_customer_id,
-        default_payment_method: reg.stripe_payment_method_id,
-        items: [{
-          price_data: {
-            currency: "usd",
-            product_data: { name: `Galoras ${TIER_LABELS[tier]} Coach Subscription` },
-            unit_amount: amountCents,
-            recurring: { interval: "month" },
-          },
-        }],
-        metadata: { userId: coachUserId, tier, applicationId },
-      });
+        const subscription = await stripe.subscriptions.create({
+          customer: reg.stripe_customer_id,
+          default_payment_method: reg.stripe_payment_method_id,
+          items: [{ price: price.id }],
+          metadata: { userId: coachUserId, tier, applicationId },
+        });
 
-      chargeResult = { subscriptionId: subscription.id, status: subscription.status };
-
-      // Update registration
-      await supabase
-        .from("coach_registrations")
-        .update({
-          status: "approved",
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", coachUserId);
+        chargeResult = { subscriptionId: subscription.id, status: subscription.status };
+      } catch (billingErr: any) {
+        console.error("approve-coach: billing failed (approval continues)", billingErr?.message);
+        chargeResult = { error: billingErr?.message ?? "billing failed" };
+      }
+    } else {
+      chargeResult = { billed: false, reason: BILL_ON_APPROVAL ? "no card on file" : "founding period — billing disabled" };
     }
 
-    // Update or create coach record
+    // Mark the registration approved regardless of billing outcome
+    const { error: regUpdateError } = await supabase
+      .from("coach_registrations")
+      .update({ status: "approved", updated_at: new Date().toISOString() })
+      .eq("user_id", coachUserId);
+    if (regUpdateError) {
+      console.error("approve-coach: coach_registrations update failed", regUpdateError);
+    }
+
+    // ── Create or publish the coach record ────────────────────────────────────
     const { data: existingCoach } = await supabase
       .from("coaches")
       .select("id")
@@ -134,12 +147,19 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (existingCoach) {
-      await supabase
+      const { error: coachUpdateError } = await supabase
         .from("coaches")
         .update({ lifecycle_status: "published", tier, status: "approved" })
         .eq("id", existingCoach.id);
+      if (coachUpdateError) {
+        console.error("approve-coach: coaches update FAILED", coachUpdateError);
+        return new Response(
+          JSON.stringify({ error: `Could not publish coach: ${coachUpdateError.message}` }),
+          { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
     } else {
-      await supabase.from("coaches").insert({
+      const { error: coachInsertError } = await supabase.from("coaches").insert({
         user_id: coachUserId,
         display_name: reg.full_name,
         email: reg.email,
@@ -149,13 +169,20 @@ Deno.serve(async (req) => {
         status: "approved",
         lifecycle_status: "published",
       });
+      if (coachInsertError) {
+        console.error("approve-coach: coaches insert FAILED", coachInsertError);
+        return new Response(
+          JSON.stringify({ error: `Could not create coach: ${coachInsertError.message}` }),
+          { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+        );
+      }
     }
 
     // Write tag mappings and create pending product from application data
     try {
       const { data: appData } = await supabase
         .from("coach_applications")
-        .select("specialty_tags, audience_tags, style_tags, industry_tags, availability_tag, enterprise_tags, credential_tags, pending_product")
+        .select("specialty_tags, audience_tags, style_tags, industry_tags, availability_tag, enterprise_tags, credential_tags, outcome_tags, format_tags, pending_product")
         .eq("user_id", coachUserId)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -178,6 +205,8 @@ Deno.serve(async (req) => {
           ...(appData.availability_tag ? [appData.availability_tag] : []),
           ...(appData.enterprise_tags || []),
           ...(appData.credential_tags || []),
+          ...(appData.outcome_tags || []),
+          ...(appData.format_tags || []),
         ];
 
         if (allTagKeys.length > 0) {
@@ -189,9 +218,12 @@ Deno.serve(async (req) => {
 
           if (tagRows && tagRows.length > 0) {
             const tagMapRows = tagRows.map((t: any) => ({ coach_id: coachId, tag_id: t.id }));
-            await supabase
+            const { error: tagMapError } = await supabase
               .from("coach_tag_map")
               .upsert(tagMapRows, { onConflict: "coach_id,tag_id", ignoreDuplicates: true });
+            if (tagMapError) {
+              console.error("approve-coach: coach_tag_map write FAILED — coach will be unfilterable", tagMapError);
+            }
           }
         }
 
@@ -258,6 +290,24 @@ Deno.serve(async (req) => {
     // Send approval email
     const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
     if (RESEND_API_KEY && reg.email) {
+      const billedLine = chargeResult && (chargeResult as any).subscriptionId
+        ? `<tr>
+             <td style="padding:6px 0">Galoras ${TIER_LABELS[tier]} Coach Membership</td>
+             <td style="text-align:right;font-weight:600">$${(amountCents / 100).toFixed(2)} USD/month</td>
+           </tr>
+           <tr>
+             <td style="padding:6px 0;color:#6b7280">Billing</td>
+             <td style="text-align:right;color:#6b7280">Monthly, starting today</td>
+           </tr>`
+        : `<tr>
+             <td style="padding:6px 0">Galoras ${TIER_LABELS[tier]} Coach Membership</td>
+             <td style="text-align:right;font-weight:600">Founding member — no charge</td>
+           </tr>
+           <tr>
+             <td style="padding:6px 0;color:#6b7280">Billing</td>
+             <td style="text-align:right;color:#6b7280">Free until January. We'll tell you before anything changes.</td>
+           </tr>`;
+
       await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -267,36 +317,25 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           from: Deno.env.get("EMAIL_FROM") ?? "Galoras <noreply@galoras.com>",
           to: [reg.email],
-          subject: "You're approved — Payment receipt & next steps",
+          subject: "You're in — welcome to Galoras",
           html: `
             <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#111">
-              <h2 style="margin-bottom:4px">Congratulations, ${reg.full_name ?? "Coach"}! You're in.</h2>
+              <h2 style="margin-bottom:4px">Congratulations, ${reg.full_name ?? "Coach"}. You're in.</h2>
               <p style="color:#6b7280;margin-top:0">Your Galoras coach application has been approved.</p>
 
-              <!-- Receipt -->
+              <!-- Membership -->
               <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:20px;margin:24px 0">
-                <p style="margin:0 0 12px;font-weight:700;font-size:15px;color:#111">Payment Receipt</p>
+                <p style="margin:0 0 12px;font-weight:700;font-size:15px;color:#111">Your membership</p>
                 <table style="width:100%;font-size:14px;color:#374151;border-collapse:collapse">
-                  <tr>
-                    <td style="padding:6px 0">Galoras ${TIER_LABELS[tier]} Coach Subscription</td>
-                    <td style="text-align:right;font-weight:600">$${(amountCents / 100).toFixed(2)} USD/month</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:6px 0;color:#6b7280">Billing</td>
-                    <td style="text-align:right;color:#6b7280">Monthly, starting today</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:6px 0;color:#6b7280">Card on file</td>
-                    <td style="text-align:right;color:#6b7280">Card authorized at application</td>
-                  </tr>
+                  ${billedLine}
                 </table>
               </div>
 
               <!-- Profile CTA -->
               <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px;margin:24px 0">
-                <p style="margin:0 0 8px;font-weight:600;color:#166534">Before we go live — complete your profile</p>
+                <p style="margin:0 0 8px;font-weight:600;color:#166534">Next — complete your profile</p>
                 <p style="margin:0 0 16px;font-size:14px;color:#374151">
-                  Review your coach profile, update your bio, add your products, and make any changes before your listing goes public.
+                  Review your profile, update your bio, add your products, and make any changes before your listing goes public.
                 </p>
                 <a href="https://galoras.com/coach-dashboard/edit"
                    style="background:#16a34a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">
@@ -304,19 +343,9 @@ Deno.serve(async (req) => {
                 </a>
               </div>
 
-              <!-- Orientation -->
-              <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:12px;padding:20px;margin:24px 0">
-                <p style="margin:0 0 8px;font-weight:600;color:#0369a1">Book your orientation call</p>
-                <p style="margin:0 0 16px;font-size:14px;color:#374151">
-                  30 minutes with Barnes — platform walkthrough, how to get the most from your membership, and your first 90 days on Galoras.
-                </p>
-                <a href="https://calendly.com/barnes-lam/galoras-initial-session-call"
-                   style="background:#0ea5e9;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">
-                  Book Orientation →
-                </a>
-              </div>
-
-              <p style="font-size:14px;color:#6b7280">Questions? Reply to this email or reach out to <a href="mailto:barnes@thestrategypitch.com" style="color:#0ea5e9">barnes@thestrategypitch.com</a>.</p>
+              <p style="font-size:14px;color:#6b7280">
+                Any questions, just reply to this email — it comes straight to us.
+              </p>
               <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
               <p style="color:#999;font-size:12px">© Galoras · galoras.com</p>
             </div>
@@ -325,17 +354,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Auto-tag coach from profile text (fills gaps if application tags were incomplete)
-    try {
-      const coachRow2 = await supabase.from("coaches").select("id").eq("user_id", coachUserId).single();
-      if (coachRow2.data?.id) {
-        await supabase.functions.invoke("auto-tag-coach", {
-          body: { coachId: coachRow2.data.id },
-        });
-      }
-    } catch (autoTagErr: any) {
-      console.error("auto-tag-coach call failed (non-blocking):", autoTagErr);
-    }
+    // NOTE: the auto-tag-coach call that used to sit here has been removed.
+    //
+    // That function runs `DELETE FROM coach_tag_map WHERE coach_id = ...` and
+    // then re-inserts whatever its keyword rules match. Its rule set is built
+    // against an older tag vocabulary: of its 44 rules, 38 reference tag_keys
+    // that do not exist in the `tags` table. Only c_suite, senior_leaders,
+    // leadership_development, technology, professional_services and healthcare
+    // can ever match.
+    //
+    // So approving a coach would wipe their curated tags and replace them with
+    // at most six. It was harmless while coach_tag_map did not exist; now that
+    // the table is live it is destructive. Re-enable only after the rules are
+    // rebuilt against the current 60-tag vocabulary AND the delete is made
+    // additive rather than a wipe.
 
     return new Response(
       JSON.stringify({ success: true, chargeResult }),
