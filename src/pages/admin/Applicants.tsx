@@ -256,14 +256,20 @@ export default function Applicants() {
     const now = new Date().toISOString();
 
     if (action === "approved") {
-      const { data: reg } = await supabase.from("coach_registrations").select("user_id").eq("email", selected.email).maybeSingle();
-      if (!reg?.user_id) {
-        toast({ title: "No registration found", description: "This coach hasn't completed payment setup yet.", variant: "destructive" });
-        setSaving(false);
-        return;
-      }
+      // A registration only exists for a coach who chose a paid tier and saved
+      // a card. An INVITED coach never sees that step, so this must not block
+      // approval: approve-coach falls back to the application for everything
+      // it needs, and accepts a null coachUserId.
+      const { data: reg } = await supabase
+        .from("coach_registrations").select("user_id")
+        .eq("email", selected.email).limit(1).maybeSingle();
+
       const { error: fnError } = await supabase.functions.invoke("approve-coach", {
-        body: { applicationId: selected.id, coachUserId: reg.user_id, decisionReason: decisionNotes },
+        body: {
+          applicationId: selected.id,
+          coachUserId: reg?.user_id ?? selected.user_id ?? null,
+          decisionReason: decisionNotes,
+        },
         headers: { Authorization: `Bearer ${session?.access_token}` },
       });
       if (fnError) {
@@ -272,9 +278,18 @@ export default function Applicants() {
         return;
       }
       // Stamp reviewed_at + published_at on coaches record
-      await supabase.from("coaches")
-        .update({ reviewed_at: now, published_at: now, reviewer_notes: decisionNotes || null })
-        .eq("user_id", reg.user_id);
+      // Stamp by email when there is no user id - an invited coach has none,
+      // and .eq("user_id", null) matches nothing rather than meaning IS NULL.
+      const stampedBy = reg?.user_id ?? selected.user_id ?? null;
+      if (stampedBy) {
+        await supabase.from("coaches")
+          .update({ reviewed_at: now, published_at: now, reviewer_notes: decisionNotes || null })
+          .eq("user_id", stampedBy);
+      } else if (selected.email) {
+        await supabase.from("coaches")
+          .update({ reviewed_at: now, published_at: now, reviewer_notes: decisionNotes || null })
+          .eq("email", selected.email);
+      }
       toast({ title: "Coach approved!", description: "Subscription activated and coach published." });
     } else {
       await supabase.from("coach_applications").update({
