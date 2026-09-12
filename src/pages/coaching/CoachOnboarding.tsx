@@ -22,6 +22,46 @@ import { CoachTierPayment } from "@/components/coaching/CoachTierPayment";
 
 const storageKey = (uid: string) => `galoras_coach_onboarding_${uid}`;
 
+// ── Keeping an invited coach's work alive across a refresh ───────────────────
+//
+// OnboardRedirect hands the token over in router state, which keeps it out of
+// the URL, history and referer headers. But router state does not survive a
+// reload, and an invited coach has no account to fall back on - so a refresh
+// dropped them on the "invalid link" screen with everything they had typed
+// gone. Recovery was to find the original email and click the link again.
+//
+// Mirror the token into sessionStorage on arrival and read it back on mount.
+// Per tab, cleared when the tab closes, never written to a URL.
+const INVITE_TOKEN_KEY = "galoras_onboarding_token";
+const INVITE_DRAFT_KEY = "galoras_coach_onboarding_invite";
+
+function readInviteToken(stateToken: string | null): string | null {
+  try {
+    if (stateToken) {
+      const previous = sessionStorage.getItem(INVITE_TOKEN_KEY);
+      // A different invitation opened in the same tab: do not restore the
+      // previous coach's draft over this one.
+      if (previous && previous !== stateToken) {
+        sessionStorage.removeItem(INVITE_DRAFT_KEY);
+      }
+      sessionStorage.setItem(INVITE_TOKEN_KEY, stateToken);
+      return stateToken;
+    }
+    return sessionStorage.getItem(INVITE_TOKEN_KEY);
+  } catch {
+    // Storage blocked (private mode, locked-down browser). Behave exactly as
+    // before rather than failing: the token still works, a refresh still loses it.
+    return stateToken;
+  }
+}
+
+function clearInviteStorage() {
+  try {
+    sessionStorage.removeItem(INVITE_TOKEN_KEY);
+    sessionStorage.removeItem(INVITE_DRAFT_KEY);
+  } catch { /* nothing to clear */ }
+}
+
 const TIER_OPTIONS = [
   { key: "pro" as const,    name: "Pro",    price: "$49/month",  desc: "Entry-level visibility. Get listed and start booking.",                                         comingSoon: false },
   { key: "elite" as const,  name: "Elite",  price: "$99/month",  desc: "Priority exposure, enhanced profile visibility, and exclusive platform access.", badge: "Most Popular", comingSoon: false },
@@ -60,8 +100,11 @@ interface PendingProduct {
   title: string;
   outcome_statement: string;
   price_type: "enquiry" | "fixed" | "range";
+  // All three are in CENTS, matching coach_products.price_amount /
+  // price_range_min / price_range_max. The inputs take dollars and convert.
   price_cents: number | null;
-  price_display: string;
+  price_range_min: number | null;
+  price_range_max: number | null;
   outcome_tags: string[];
   audience_tags: string[];
   format_tags: string[];
@@ -82,7 +125,10 @@ export default function CoachOnboarding() {
   }, []);
   const isMobile = !isDesktop;
 
-  const token = (location.state as { token?: string } | null)?.token ?? null;
+  // Lazy initialiser so it runs once, before the effects - TOTAL_STEPS and the
+  // mount effect both need the right value on the first render after a reload.
+  const stateToken = (location.state as { token?: string } | null)?.token ?? null;
+  const [token] = useState<string | null>(() => readInviteToken(stateToken));
 
   const [state, setState] = useState<"loading" | "invalid" | "form" | "submitting" | "success">("loading");
   const [step, setStep] = useState(1);
@@ -115,13 +161,45 @@ export default function CoachOnboarding() {
     outcome_statement: "",
     price_type: "enquiry",
     price_cents: null,
-    price_display: "",
+    price_range_min: null,
+    price_range_max: null,
     outcome_tags: [],
     audience_tags: [],
     format_tags: [],
   });
 
   const { types: productTypes } = useProductTypes();
+
+  // Restore a draft saved earlier in this browser session. Returns true if a
+  // draft was found and applied, in which case the caller must not overwrite
+  // the restored fields with anything else.
+  const applySavedDraft = (key: string): boolean => {
+    const saved = (() => {
+      try {
+        const raw = sessionStorage.getItem(key);
+        return raw ? JSON.parse(raw) : null;
+      } catch { return null; }
+    })();
+
+    if (!saved || !(saved.step > 1)) return false;
+
+    const fd = saved.formData ?? {};
+    setFullName(fd.fullName ?? "");
+    setBio(fd.bio ?? "");
+    setCurrentRole(fd.currentRole ?? "");
+    setLinkedinUrl(fd.linkedinUrl ?? "");
+    setBookingUrl(fd.bookingUrl ?? "");
+    setSpecialtyTags(fd.specialtyTags ?? []);
+    setAudienceTags(fd.audienceTags ?? []);
+    setStyleTags(fd.styleTags ?? []);
+    setIndustryTags(fd.industryTags ?? []);
+    setAvailabilityTag(fd.availabilityTag ?? []);
+    setEnterpriseTags(fd.enterpriseTags ?? []);
+    setCredentialTags(fd.credentialTags ?? []);
+    if (fd.pendingProduct) setPendingProduct(fd.pendingProduct);
+    setStep(saved.step);
+    return true;
+  };
 
   useEffect(() => {
     if (token) { validateToken(); return; }
@@ -131,29 +209,7 @@ export default function CoachOnboarding() {
       setUserId(session.user.id);
 
       // Restore progress saved in this browser session
-      const saved = (() => {
-        try {
-          const raw = sessionStorage.getItem(storageKey(session.user.id));
-          return raw ? JSON.parse(raw) : null;
-        } catch { return null; }
-      })();
-
-      if (saved?.step > 1) {
-        const fd = saved.formData ?? {};
-        setFullName(fd.fullName ?? "");
-        setBio(fd.bio ?? "");
-        setCurrentRole(fd.currentRole ?? "");
-        setLinkedinUrl(fd.linkedinUrl ?? "");
-        setBookingUrl(fd.bookingUrl ?? "");
-        setSpecialtyTags(fd.specialtyTags ?? []);
-        setAudienceTags(fd.audienceTags ?? []);
-        setStyleTags(fd.styleTags ?? []);
-        setIndustryTags(fd.industryTags ?? []);
-        setAvailabilityTag(fd.availabilityTag ?? []);
-        setEnterpriseTags(fd.enterpriseTags ?? []);
-        setCredentialTags(fd.credentialTags ?? []);
-        if (fd.pendingProduct) setPendingProduct(fd.pendingProduct);
-        setStep(saved.step);
+      if (applySavedDraft(storageKey(session.user.id))) {
         setState("form");
         return;
       }
@@ -176,7 +232,12 @@ export default function CoachOnboarding() {
   const validateToken = async () => {
     try {
       const { data, error } = await supabase.functions.invoke("validate-onboarding-token", { body: { token } });
-      if (error || data?.error) { setState("invalid"); return; }
+      if (error || data?.error) { clearInviteStorage(); setState("invalid"); return; }
+
+      // A draft from earlier in this session wins over the application record:
+      // it is what the coach typed, the application is only the seed.
+      if (applySavedDraft(INVITE_DRAFT_KEY)) { setState("form"); return; }
+
       const app = data.application;
       setFullName(app.full_name || "");
       setBio(app.bio || "");
@@ -213,6 +274,21 @@ export default function CoachOnboarding() {
       if (pendingProduct.outcome_tags.length < 1) {
         toast({ title: "Select at least 1 outcome tag", variant: "destructive" }); return false;
       }
+      // A price the coach types must survive to the database. Catching it here
+      // is the difference between a clear message now and a product that shows
+      // no price at all with nothing to explain why.
+      if (pendingProduct.price_type === "fixed" && !pendingProduct.price_cents) {
+        toast({ title: "Enter a price, or choose Enquiry", variant: "destructive" }); return false;
+      }
+      if (pendingProduct.price_type === "range") {
+        const { price_range_min: lo, price_range_max: hi } = pendingProduct;
+        if (!lo || !hi) {
+          toast({ title: "Enter both ends of the range, or choose Enquiry", variant: "destructive" }); return false;
+        }
+        if (lo >= hi) {
+          toast({ title: "The 'To' price must be higher than the 'From' price", variant: "destructive" }); return false;
+        }
+      }
       if (pendingProduct.audience_tags.length < 1) {
         toast({ title: "Select at least 1 audience tag for the product", variant: "destructive" }); return false;
       }
@@ -224,15 +300,21 @@ export default function CoachOnboarding() {
   };
 
   const persistProgress = (nextStep: number) => {
-    if (!userId) return;
-    sessionStorage.setItem(storageKey(userId), JSON.stringify({
-      step: nextStep,
-      formData: {
-        fullName, bio, currentRole, linkedinUrl, bookingUrl,
-        specialtyTags, audienceTags, styleTags, industryTags,
-        availabilityTag, enterpriseTags, credentialTags, pendingProduct,
-      },
-    }));
+    // An invited coach has no account and therefore no userId. Keying only on
+    // userId meant invited coaches got no draft saving at all, which is the
+    // half of the refresh bug that loses everything they typed.
+    const key = token ? INVITE_DRAFT_KEY : (userId ? storageKey(userId) : null);
+    if (!key) return;
+    try {
+      sessionStorage.setItem(key, JSON.stringify({
+        step: nextStep,
+        formData: {
+          fullName, bio, currentRole, linkedinUrl, bookingUrl,
+          specialtyTags, audienceTags, styleTags, industryTags,
+          availabilityTag, enterpriseTags, credentialTags, pendingProduct,
+        },
+      }));
+    } catch { /* private mode or quota — proceed without a draft */ }
   };
 
   const handleNext = () => {
@@ -260,6 +342,9 @@ export default function CoachOnboarding() {
           },
         });
         if (error || data?.error) throw new Error(data?.error || "Failed to complete onboarding");
+        // Submitted and accepted — the draft and the token have done their job.
+        // Clear them so a refresh on the success screen cannot replay the form.
+        clearInviteStorage();
         setState("success");
         toast({ title: "Profile completed!", description: "Your coach profile has been saved successfully." });
       } else {
@@ -629,7 +714,7 @@ export default function CoachOnboarding() {
                         <div className="flex gap-3">
                           {(["enquiry", "fixed", "range"] as const).map(pt => (
                             <button key={pt} type="button"
-                              onClick={() => setPP({ price_type: pt, price_cents: null, price_display: "" })}
+                              onClick={() => setPP({ price_type: pt, price_cents: null, price_range_min: null, price_range_max: null })}
                               className={`px-5 py-2.5 rounded-full border text-sm font-medium transition-colors ${
                                 pp.price_type === pt
                                   ? "bg-primary text-primary-foreground border-primary"
@@ -640,28 +725,30 @@ export default function CoachOnboarding() {
                           ))}
                         </div>
                         {pp.price_type === "fixed" && (
-                          <div className="grid grid-cols-2 gap-4 pt-1">
-                            <div className="space-y-2">
-                              <Label className="text-zinc-300 text-sm">Price (USD)</Label>
-                              <Input type="number" min={0} placeholder="0"
-                                value={pp.price_cents !== null ? pp.price_cents / 100 : ""}
-                                onChange={e => setPP({ price_cents: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : null })}
-                                className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-11 text-base focus-visible:ring-primary" />
-                            </div>
-                            <div className="space-y-2">
-                              <Label className="text-zinc-300 text-sm">Display Text</Label>
-                              <Input value={pp.price_display} onChange={e => setPP({ price_display: e.target.value })}
-                                placeholder="e.g. $2,500"
-                                className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-11 text-base focus-visible:ring-primary" />
-                            </div>
+                          <div className="space-y-2 pt-1">
+                            <Label className="text-zinc-300 text-sm">Price (USD)</Label>
+                            <Input type="number" min={0} placeholder="0"
+                              value={pp.price_cents !== null ? pp.price_cents / 100 : ""}
+                              onChange={e => setPP({ price_cents: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : null })}
+                              className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-11 text-base focus-visible:ring-primary" />
                           </div>
                         )}
                         {pp.price_type === "range" && (
-                          <div className="space-y-2 pt-1">
-                            <Label className="text-zinc-300 text-sm">Price Range Display</Label>
-                            <Input value={pp.price_display} onChange={e => setPP({ price_display: e.target.value })}
-                              placeholder="e.g. $2,000 – $5,000"
-                              className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-11 text-base focus-visible:ring-primary" />
+                          <div className="grid grid-cols-2 gap-4 pt-1">
+                            <div className="space-y-2">
+                              <Label className="text-zinc-300 text-sm">From (USD)</Label>
+                              <Input type="number" min={0} placeholder="0"
+                                value={pp.price_range_min !== null ? pp.price_range_min / 100 : ""}
+                                onChange={e => setPP({ price_range_min: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : null })}
+                                className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-11 text-base focus-visible:ring-primary" />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-zinc-300 text-sm">To (USD)</Label>
+                              <Input type="number" min={0} placeholder="0"
+                                value={pp.price_range_max !== null ? pp.price_range_max / 100 : ""}
+                                onChange={e => setPP({ price_range_max: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : null })}
+                                className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-11 text-base focus-visible:ring-primary" />
+                            </div>
                           </div>
                         )}
                       </div>
