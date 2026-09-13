@@ -9,7 +9,7 @@ import {
 import {
   CheckCircle2, XCircle, RefreshCw, Clock, User,
   Linkedin, Globe, Mail, Phone, Loader2, Sparkles, Zap,
-  AlertTriangle, TrendingUp, Tags, Save,
+  AlertTriangle, TrendingUp, Tags, Save, Link2, Copy,
 } from "lucide-react";
 
 type FitDimension = { score: number; note: string };
@@ -115,6 +115,14 @@ export default function Applicants() {
   const [decisionNotes, setDecisionNotes] = useState("");
   const [fitScore, setFitScore] = useState(0);
   const [portfolio, setPortfolio] = useState<PortfolioCount[]>([]);
+
+  // ── Invitation link ────────────────────────────────────────────────────────
+  // create-onboarding-link has existed and worked for months with nothing in
+  // the app calling it, so the only way to invite a coach was to invoke the
+  // function by hand. Keyed by application id so a link never shows against
+  // the wrong applicant.
+  const [invite, setInvite] = useState<{ appId: string; url: string } | null>(null);
+  const [inviting, setInviting] = useState(false);
 
   // ── Tag review ─────────────────────────────────────────────────────────────
   const [vocab, setVocab] = useState<VocabTag[]>([]);
@@ -227,6 +235,56 @@ export default function Applicants() {
     toast({ title: "Saved", description: "Notes and score updated." });
     setSaving(false);
     fetchAll();
+  };
+
+  // Mint a fresh onboarding link for this applicant. Any previous link for the
+  // same application is revoked server-side, so this doubles as "resend".
+  const createInvite = async () => {
+    if (!selected) return;
+    setInviting(true);
+    setInvite(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-onboarding-link", {
+        body: { applicationId: selected.id },
+      });
+
+      const shortId = (data as { shortId?: string } | null)?.shortId;
+      const failure = error?.message ?? (data as { error?: string } | null)?.error;
+
+      if (failure || !shortId) {
+        toast({
+          title: "Could not create invitation",
+          description: failure ?? "No link was returned.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Always galoras.com, never the current origin. uat-galoras.site serves an
+      // older build against this same database, and a link sent from there would
+      // walk a coach through stale code.
+      const url = `https://galoras.com/onboard/${shortId}`;
+      setInvite({ appId: selected.id, url });
+
+      try {
+        await navigator.clipboard.writeText(url);
+        toast({ title: "Invitation link copied", description: "Paste it into your email to the coach." });
+      } catch {
+        toast({ title: "Invitation link ready", description: "Use the Copy button — the browser blocked the clipboard." });
+      }
+    } finally {
+      setInviting(false);
+    }
+  };
+
+  const copyInvite = async () => {
+    if (!invite) return;
+    try {
+      await navigator.clipboard.writeText(invite.url);
+      toast({ title: "Copied" });
+    } catch {
+      toast({ title: "Copy failed", description: "Select the link and copy it by hand.", variant: "destructive" });
+    }
   };
 
   const decide = async (action: "approved" | "revision_requested" | "rejected") => {
@@ -553,6 +611,46 @@ export default function Applicants() {
                         placeholder="Internal notes about this application…"
                         className="w-full bg-[#1a2f4a] border border-[#2a4a6f] text-slate-200 text-sm rounded-xl px-3 py-2.5 placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-amber-500/50 resize-none"
                       />
+                    </div>
+
+                    {/* Invitation — this happens before approval, not after */}
+                    <div className="mb-4 rounded-xl border border-[#2a4a6f] bg-[#132742] p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                            Onboarding invitation
+                          </p>
+                          <p className="text-xs text-slate-500 mt-1">
+                            Creates a fresh link and revokes any earlier one. Nothing is emailed — you send it.
+                          </p>
+                        </div>
+                        <button
+                          onClick={createInvite}
+                          disabled={inviting}
+                          className="shrink-0 flex items-center justify-center gap-2 h-11 px-4 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-black text-sm uppercase tracking-wider transition-colors disabled:opacity-50"
+                        >
+                          {inviting
+                            ? <Loader2 className="h-4 w-4 animate-spin" />
+                            : <><Link2 className="h-4 w-4" /> {invite?.appId === selected.id ? "New link" : "Invite"}</>}
+                        </button>
+                      </div>
+
+                      {invite?.appId === selected.id && (
+                        <div className="mt-3 flex items-center gap-2">
+                          <input
+                            readOnly
+                            value={invite.url}
+                            onFocus={(e) => e.currentTarget.select()}
+                            className="flex-1 min-w-0 bg-[#0d1b2e] border border-[#2a4a6f] text-slate-200 text-xs rounded-lg px-3 py-2 font-mono focus:outline-none focus:ring-1 focus:ring-sky-500/50"
+                          />
+                          <button
+                            onClick={copyInvite}
+                            className="shrink-0 flex items-center gap-1.5 h-9 px-3 rounded-lg border border-[#2a4a6f] text-slate-300 hover:text-white hover:border-sky-500/50 text-xs font-semibold uppercase tracking-wider transition-colors"
+                          >
+                            <Copy className="h-3.5 w-3.5" /> Copy
+                          </button>
+                        </div>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-3 gap-3 mb-4">
