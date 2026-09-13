@@ -73,7 +73,15 @@ export function ProductCard({ product, coachName, bookingUrl, getTypeConfig, onB
 
   // Determine CTA type based on product characteristics
   const isEnterprise = product.product_type === "corporate" || product.enterprise_ready;
-  const isStripe = !!onCtaClick || !!onBookNow;
+  // booking_mode is the authority on whether a product can be paid for.
+  //
+  // This used to be derived purely from which callbacks a parent handed in, so
+  // booking_mode was decorative: a product marked "enquiry" still rendered Book
+  // Now and ran a live checkout if the parent passed a handler. The two
+  // hardcoded Galoras platform products did exactly that — both carry
+  // booking_mode "enquiry" and both showed a working test-mode checkout button
+  // on every master coach's profile. No amount of SQL could have reached them.
+  const isStripe = product.booking_mode === "stripe" && (!!onCtaClick || !!onBookNow);
   const isRequestable = !!onRequest && !isStripe && !isEnterprise;
 
   let ctaLabel: string;
@@ -100,8 +108,9 @@ export function ProductCard({ product, coachName, bookingUrl, getTypeConfig, onB
   }
 
   const handleCta = () => {
-    if (onCtaClick) { onCtaClick(); return; }
-    if (onBookNow) { onBookNow(); return; }
+    // Gated on isStripe for the same reason as the label above: a checkout
+    // handler must not run for a product that is not in stripe booking mode.
+    if (isStripe) { (onCtaClick ?? onBookNow)!(); return; }
     if (isEnterprise && onEnterprise) { onEnterprise(); return; }
     if (isRequestable) { onRequest!(); return; }
     if (bookingUrl) {
