@@ -8,7 +8,7 @@ const corsHeaders = {
 };
 
 // Admin recipients — Barnes + Conor
-const ADMIN_EMAILS = ["barnes@thestrategypitch.com", "conor@galoras.com"];
+const ADMIN_EMAILS = ["conor@galoras.com"];
 const EMAIL_FROM = Deno.env.get("EMAIL_FROM") ?? "Galoras <noreply@galoras.com>";
 const PLATFORM_URL = Deno.env.get("PLATFORM_URL") ?? "https://galoras.com";
 
