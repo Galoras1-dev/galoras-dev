@@ -205,6 +205,12 @@ export default function CoachProfile() {
     }
   };
 
+  // The tier chip is a Galoras billing tier, not a mark of quality. Showing
+  // "Pro" — the entry tier — as a gold badge on a coach we invited personally
+  // reads as a ranking to the visitor and as a grading to the coach. Only the
+  // top tier earns a chip; everyone else simply has no badge.
+  const showTierBadge = coach?.tier === "master";
+
   const proofPoints = useMemo(
     () => normalizeProofPoints(coach?.proof_points),
     [coach?.proof_points]
@@ -262,7 +268,7 @@ export default function CoachProfile() {
                       <Sparkles className="h-3.5 w-3.5" />
                       Galoras Coaching Exchange
                     </div>
-                    {coach.tier && (
+                    {showTierBadge && (
                       <div className="inline-flex items-center px-3 py-1 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs font-medium capitalize">
                         {coach.tier}
                       </div>
@@ -367,10 +373,15 @@ export default function CoachProfile() {
                       </section>
                     )}
 
-                    {/* Proof Points — testimonial card style */}
-                    <section className="rounded-2xl border border-border bg-card p-8">
-                      <h2 className="text-xl font-semibold mb-6">Results & Proof</h2>
-                      {proofPoints.length > 0 ? (
+                    {/* Proof Points — testimonial card style.
+                        Only rendered when there are some. A card headed
+                        "Results & Proof" containing "No proof points available
+                        yet" was the first thing on a new coach's page: an empty
+                        trophy cabinet with a spotlight on it, which a coach
+                        reads as the site's opinion of them. */}
+                    {proofPoints.length > 0 && (
+                      <section className="rounded-2xl border border-border bg-card p-8">
+                        <h2 className="text-xl font-semibold mb-6">Results & Proof</h2>
                         <div className="space-y-4">
                           {proofPoints.map((point, index) => (
                             <div
@@ -384,10 +395,8 @@ export default function CoachProfile() {
                             </div>
                           ))}
                         </div>
-                      ) : (
-                        <p className="text-muted-foreground">No proof points available yet.</p>
-                      )}
-                    </section>
+                      </section>
+                    )}
 
                     {/* Coach's Own Products — shown first */}
                     {products.length > 0 && (
@@ -500,7 +509,7 @@ export default function CoachProfile() {
                       )}
 
                       <div className="flex flex-wrap gap-2 mb-5">
-                        {coach.tier && (
+                        {showTierBadge && (
                           <div className="inline-flex items-center px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs font-medium capitalize">
                             {coach.tier}
                           </div>
