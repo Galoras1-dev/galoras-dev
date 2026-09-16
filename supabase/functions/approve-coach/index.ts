@@ -221,6 +221,9 @@ Deno.serve(async (req) => {
           email: reg?.email ?? app.email,
           bio: reg?.bio ?? app.bio,
           linkedin_url: reg?.linkedin_url ?? app.linkedin_url,
+          // The wizard asks for this and it was being thrown away here, so a
+          // coach who gave us their Calendly had no booking link on their page.
+          booking_url: reg?.booking_url ?? app.booking_url ?? null,
           tier,
           status: "approved",
           lifecycle_status: "published",
@@ -287,6 +290,20 @@ Deno.serve(async (req) => {
         } else {
           console.log("approve-coach: slug assigned", { coachId, slug });
         }
+      }
+    }
+
+    // Where this coach's public page lives. Read back rather than reused from
+    // the insert branch, because an existing coach goes down the update path
+    // and already has a slug. Used in the approval email below.
+    let publicProfileUrl = "https://galoras.com/coaching/coaches";
+    if (coachId) {
+      const { data: slugRow } = await supabase
+        .from("coaches").select("slug").eq("id", coachId).maybeSingle();
+      if (slugRow?.slug) {
+        publicProfileUrl = `https://galoras.com/coach/${slugRow.slug}`;
+      } else {
+        console.warn("approve-coach: no slug for coach, email will link to the directory", { coachId });
       }
     }
 
@@ -492,20 +509,26 @@ Deno.serve(async (req) => {
                 </table>
               </div>
 
-              <!-- Profile CTA -->
+              <!-- Profile CTA
+                   This used to link to /coach-dashboard/edit and say the
+                   listing was not yet public. Both were untrue. That route sits
+                   behind a login, and an invited coach has no account, so the
+                   button bounced them to a sign-in screen they had no
+                   credentials for. And the listing goes live at approval, not
+                   later. Send them to the page that actually exists. -->
               <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:20px;margin:24px 0">
-                <p style="margin:0 0 8px;font-weight:600;color:#166534">Next — complete your profile</p>
+                <p style="margin:0 0 8px;font-weight:600;color:#166534">Your profile is live</p>
                 <p style="margin:0 0 16px;font-size:14px;color:#374151">
-                  Review your profile, update your bio, add your products, and make any changes before your listing goes public.
+                  Have a look and tell us what you would change — wording, focus, anything that does not sound like you.
                 </p>
-                <a href="https://galoras.com/coach-dashboard/edit"
+                <a href="${publicProfileUrl}"
                    style="background:#16a34a;color:#fff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">
-                  Complete My Profile →
+                  View My Profile →
                 </a>
               </div>
 
               <p style="font-size:14px;color:#6b7280">
-                Any questions, just reply to this email — it comes straight to us.
+                Reply to this email with any changes and we will make them for you — it comes straight to us.
               </p>
               <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
               <p style="color:#999;font-size:12px">© Galoras · galoras.com</p>
