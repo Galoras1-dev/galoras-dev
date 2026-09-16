@@ -448,11 +448,38 @@ export default function CoachOnboarding() {
                   <div className="h-16 w-16 rounded-full bg-green-500/10 flex items-center justify-center">
                     <CheckCircle className="h-8 w-8 text-green-600" />
                   </div>
-                  <div>
-                    <h1 className="text-xl font-semibold mb-2">Welcome to Galoras!</h1>
-                    <p className="text-muted-foreground">Your coach profile has been completed. You can now sign in to access your dashboard.</p>
-                  </div>
-                  <Button onClick={() => navigate("/login")}>Sign In</Button>
+                  {/* An invited coach has no account, so "sign in to access
+                      your dashboard" sent them to a login screen they had no
+                      credentials for — the same dead end that was just removed
+                      from the approval email, and this one appears within
+                      seconds of finishing, before the email arrives. It is the
+                      more likely first impression of the two.
+
+                      Self-signup coaches DO have an account and a tier step
+                      still to come, so they keep the dashboard route. */}
+                  {token ? (
+                    <>
+                      <div>
+                        <h1 className="text-xl font-semibold mb-2">That's everything — thank you.</h1>
+                        <p className="text-muted-foreground">
+                          Your profile is with us now. We'll review it and send you a link to your live
+                          page shortly. If anything needs changing, just reply to that email and we'll
+                          take care of it.
+                        </p>
+                      </div>
+                      <Button variant="outline" onClick={() => navigate("/coaching/coaches")}>
+                        See the other coaches
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <h1 className="text-xl font-semibold mb-2">Welcome to Galoras!</h1>
+                        <p className="text-muted-foreground">Your coach profile has been completed. You can now sign in to access your dashboard.</p>
+                      </div>
+                      <Button onClick={() => navigate("/login")}>Sign In</Button>
+                    </>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -778,7 +805,11 @@ export default function CoachOnboarding() {
                         ))}
                       </div>
                       <p className="text-sm text-zinc-500 pt-2">
-                        Everything look right? Click <strong className="text-zinc-300">Save & Choose Tier</strong> to continue.
+                        Everything look right? Click{" "}
+                        <strong className="text-zinc-300">
+                          {token ? "Submit Profile" : "Save & Choose Tier"}
+                        </strong>{" "}
+                        to continue.
                       </p>
                     </div>
                   )}
