@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { Layout } from "@/components/layout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Sparkles, Calendar, MessageCircle, Package } from "lucide-react";
+import { ArrowLeft, Sparkles, Calendar, MessageCircle, Package, Linkedin } from "lucide-react";
 import { AuthGate } from "@/components/AuthGate";
 import { useAuth } from "@/hooks/useAuth";
 import { ContactModal } from "@/components/coaching/ContactModal";
@@ -23,6 +23,11 @@ type CoachProfileData = {
   slug: string | null;
   display_name: string | null;
   headline: string | null;
+  // The onboarding wizard collects a bio and a LinkedIn URL and this page never
+  // showed either. A coach who completed all five steps got a page with their
+  // name on it and nothing else they had written.
+  bio: string | null;
+  linkedin_url: string | null;
   positioning_statement: string | null;
   methodology: string | null;
   coaching_style: string | null;
@@ -159,7 +164,7 @@ export default function CoachProfile() {
       let query = supabase
         .from("coaches")
         .select(
-          "id, slug, display_name, headline, positioning_statement, methodology, coaching_style, engagement_format, primary_pillar, proof_points, audience, tier, lifecycle_status, booking_url, avatar_url, video_url"
+          "id, slug, display_name, headline, bio, linkedin_url, positioning_statement, methodology, coaching_style, engagement_format, primary_pillar, proof_points, audience, tier, lifecycle_status, booking_url, avatar_url, video_url"
         )
         .eq("lifecycle_status", "published");
 
@@ -276,9 +281,27 @@ export default function CoachProfile() {
                       {coach.headline}
                     </p>
                   )}
-                  <p className="text-base md:text-lg text-muted-foreground max-w-2xl">
-                    {coach.positioning_statement || "Positioning statement not available."}
-                  </p>
+                  {/* Fall back to the bio the coach wrote during onboarding.
+                      Printing "not available" told the visitor nothing and made
+                      a real coach's page look abandoned. If there is genuinely
+                      nothing to say, say nothing. */}
+                  {(coach.positioning_statement || coach.bio) && (
+                    <p className="text-base md:text-lg text-muted-foreground max-w-2xl whitespace-pre-wrap">
+                      {coach.positioning_statement || coach.bio}
+                    </p>
+                  )}
+
+                  {coach.linkedin_url && (
+                    <a
+                      href={coach.linkedin_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 mt-4 text-sm text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      <Linkedin className="h-4 w-4" />
+                      LinkedIn
+                    </a>
+                  )}
                 </div>
 
                 {/* Two-column layout */}
@@ -287,13 +310,17 @@ export default function CoachProfile() {
                   {/* Left: main content */}
                   <div className="space-y-6">
 
-                    {/* Methodology */}
-                    <section className="rounded-2xl border border-border bg-card p-8">
-                      <h2 className="text-xl font-semibold mb-4">Methodology</h2>
-                      <p className="text-muted-foreground leading-7 whitespace-pre-wrap">
-                        {coach.methodology || "Methodology not available."}
-                      </p>
-                    </section>
+                    {/* Methodology — only when there is one. An empty section
+                        headed "Methodology" saying "Methodology not available"
+                        is worse than no section at all. */}
+                    {coach.methodology && (
+                      <section className="rounded-2xl border border-border bg-card p-8">
+                        <h2 className="text-xl font-semibold mb-4">Methodology</h2>
+                        <p className="text-muted-foreground leading-7 whitespace-pre-wrap">
+                          {coach.methodology}
+                        </p>
+                      </section>
+                    )}
 
                     {/* Intro Video */}
                     {coach.video_url && (
