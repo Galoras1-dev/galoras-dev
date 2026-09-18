@@ -7,6 +7,7 @@ import { FounderVideoModal } from "@/components/FounderVideoModal";
 import { FeaturedCoaches } from "@/components/FeaturedCoaches";
 import { HowItWorks } from "@/components/HowItWorks";
 import { SEO } from "@/components/SEO";
+import { PreLaunchNotice } from "@/components/PreLaunchNotice";
 import { ArrowRight, Compass, Zap, Target, Brain, MessageCircle, TrendingUp } from "lucide-react";
 
 const categories = [
@@ -148,6 +149,7 @@ export default function Index() {
         canonical="/"
       />
       <FounderVideoModal />
+      <PreLaunchNotice />
       {/* Hero Section */}
       <section className="relative min-h-[90vh] flex items-center overflow-hidden">
         {/* Background Image */}
@@ -179,9 +181,9 @@ export default function Index() {
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
-              <Link to="/coaching">
+              <Link to="/apply">
                 <Button size="lg" variant="outline" className="border-primary/50 text-foreground hover:bg-primary/10 text-lg px-8 h-14">
-                  Find Your Coach
+                  Join as a Coach
                 </Button>
               </Link>
             </div>
