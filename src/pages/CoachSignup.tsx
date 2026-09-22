@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,15 +26,21 @@ export default function CoachSignup() {
   const [searchParams] = useSearchParams();
   const tierParam = searchParams.get("tier");
   const applicationId = searchParams.get("applicationId");
+
+  // Seeded by /apply so nobody retypes what they just gave us. A refresh loses
+  // it and the fields fall back to empty, which is exactly how this screen
+  // behaved before — so there is no worse case than today.
+  const location = useLocation();
+  const prefill = (location.state as { prefill?: Record<string, string> } | null)?.prefill;
   const { toast } = useToast();
   const [step, setStep] = useState<Step>("info");
   const [isLoading, setIsLoading] = useState(false);
 
   // Step 1 fields
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [currentRole, setCurrentRole] = useState("");
-  const [linkedinUrl, setLinkedinUrl] = useState("");
+  const [fullName, setFullName] = useState(prefill?.fullName ?? "");
+  const [email, setEmail] = useState(prefill?.email ?? "");
+  const [currentRole, setCurrentRole] = useState(prefill?.currentRole ?? "");
+  const [linkedinUrl, setLinkedinUrl] = useState(prefill?.linkedinUrl ?? "");
 
   // Step 2
   const [otpCode, setOtpCode] = useState("");

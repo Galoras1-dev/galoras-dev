@@ -155,7 +155,22 @@ export default function Apply() {
         description: "Create your account to secure your spot — we'll only charge your card if you're approved.",
       });
 
-      navigate(`/coach-signup?applicationId=${applicationId}`);
+      // Carry what they just typed straight into account creation. Without this
+      // an applicant retypes their name, email, role and LinkedIn thirty seconds
+      // after giving them, which is the first thing anyone notices about this
+      // flow. Router state rather than a database read, because the /apply
+      // insert deliberately has no SELECT policy — applicant PII must not be
+      // world-readable, and that constraint is correct.
+      navigate(`/coach-signup?applicationId=${applicationId}`, {
+        state: {
+          prefill: {
+            fullName: formData.full_name,
+            email: formData.email,
+            currentRole: formData.current_role,
+            linkedinUrl: normalizeUrl(formData.linkedin_url),
+          },
+        },
+      });
 
     } catch (error) {
       console.error("Submit error:", error);
