@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase, signOutAndClear } from "@/integrations/supabase/client";
-import { LayoutGrid, Users, BookOpen, Package, LogOut, ChevronRight, Gauge, MessageSquare } from "lucide-react";
+import { LayoutGrid, Users, BookOpen, Package, LogOut, ChevronRight, Gauge, MessageSquare, Home } from "lucide-react";
 
 const NAV = [
   { label: "Portal",     href: "/admin/portal",     icon: Gauge },
@@ -92,9 +92,10 @@ export function AdminLayout({ children, title }: AdminLayoutProps) {
           </h1>
           <Link
             to="/"
-            className="ml-auto text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
+            className="ml-auto inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-semibold text-zinc-300 hover:text-white hover:border-zinc-500 hover:bg-zinc-900 transition-colors"
           >
-            ← Back to site
+            <Home className="h-3.5 w-3.5" />
+            Back to site
           </Link>
         </header>
 
