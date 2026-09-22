@@ -18,24 +18,33 @@ import {
   Send
 } from "lucide-react";
 
+// Every entry here must be a channel that actually works.
+//
+// Removed: a chat card promising availability Mon-Fri 9am-6pm EST with no chat
+// software of any kind behind it, and two addresses that are not mailboxes.
+//
+// Do not add a channel back to this list until it can receive a message.
 const contactMethods = [
   {
     icon: Mail,
     title: "Email Us",
-    description: "hello@galoras.com",
-    detail: "We respond within 24 hours",
-  },
-  {
-    icon: MessageCircle,
-    title: "Live Chat",
-    description: "Available Mon-Fri",
-    detail: "9am - 6pm EST",
+    description: "conor@galoras.com",
+    detail: "Straight to the founder, not a queue.",
+    href: "mailto:conor@galoras.com",
   },
   {
     icon: Building2,
-    title: "Business Inquiries",
-    description: "business@galoras.com",
-    detail: "For enterprise solutions",
+    title: "Business & Enterprise",
+    description: "conor@galoras.com",
+    detail: "Teams, leadership programmes, partnerships.",
+    href: "mailto:conor@galoras.com?subject=Enterprise%20enquiry",
+  },
+  {
+    icon: MessageCircle,
+    title: "Something Broken?",
+    description: "Tell us what you hit",
+    detail: "We are pre-launch and we would rather hear it than not.",
+    href: "mailto:conor@galoras.com?subject=Galoras%20%E2%80%94%20something%20is%20broken",
   },
 ];
 
@@ -55,17 +64,44 @@ export default function Contact() {
     e.preventDefault();
     setIsSubmitting(true);
 
+    // ── Why this does not write to the database ──────────────────────────────
+    //
+    // It used to insert into a table called `leads`, which has never existed.
+    // Every message submitted here failed with a PostgREST 42P01 and was thrown
+    // away — the visitor saw a red "Failed to send" toast, confirmed live.
+    //
+    // The obvious replacement, `coaching_requests`, does not fit: coach_id on
+    // that table is NOT NULL and a foreign key to coaches(id). Every row in it
+    // today genuinely belongs to a coach, and loosening that to accommodate one
+    // page would weaken it for every real row.
+    //
+    // So this sends an email and stores nothing. `send-admin-alert` is already
+    // deployed, already emails conor@galoras.com, and is already invoked from
+    // the coach-profile Request button.
+    const extra = [
+      formData.company_size ? `Company size: ${formData.company_size}` : "",
+      formData.interest.length ? `Interested in: ${formData.interest.join(", ")}` : "",
+    ].filter(Boolean).join("\n");
+
     try {
-      const { error } = await supabase.from("leads").insert({
-        ...formData,
-        source: "contact_page",
+      const { error } = await supabase.functions.invoke("send-admin-alert", {
+        body: {
+          alertType: "customer_request",
+          name: formData.contact_name,
+          email: formData.contact_email,
+          coachName: "Galoras — contact page",
+          product: formData.interest.length ? formData.interest.join(", ") : "General enquiry",
+          goal: formData.message,
+          context: extra,
+          urgency: "medium",
+        },
       });
 
       if (error) throw error;
 
       toast({
-        title: "Message sent!",
-        description: "We'll get back to you within 24 hours.",
+        title: "Message sent",
+        description: "It goes straight to Conor. You'll hear back within 24 hours.",
       });
 
       setFormData({
@@ -77,9 +113,11 @@ export default function Contact() {
         message: "",
       });
     } catch (error) {
+      console.error("Contact form send failed:", error);
       toast({
-        title: "Error",
-        description: "Failed to send message. Please try again.",
+        title: "That didn't send",
+        description:
+          "Something on our side failed, and we are pre-launch so that happens. Email conor@galoras.com directly and it will reach the right person.",
         variant: "destructive",
       });
     } finally {
@@ -120,16 +158,20 @@ export default function Contact() {
         <div className="container-wide">
           <div className="grid md:grid-cols-3 gap-8">
             {contactMethods.map((method, index) => (
-              <div key={index} className="flex items-start gap-4">
+              <a
+                key={index}
+                href={method.href}
+                className="flex items-start gap-4 group rounded-xl -m-2 p-2 transition-colors hover:bg-primary/5"
+              >
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                   <method.icon className="h-6 w-6 text-primary" />
                 </div>
                 <div>
                   <h3 className="font-display font-semibold mb-1">{method.title}</h3>
-                  <p className="text-primary">{method.description}</p>
+                  <p className="text-primary group-hover:underline underline-offset-4">{method.description}</p>
                   <p className="text-sm text-muted-foreground">{method.detail}</p>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         </div>
@@ -261,7 +303,7 @@ export default function Contact() {
             </p>
             <div className="flex items-center justify-center gap-2 mt-4 text-sm text-muted-foreground">
               <Clock className="h-4 w-4" />
-              Business hours: 9am - 6pm EST, Mon-Fri
+              Based in Miami. Messages are read the same day, most days.
             </div>
           </div>
         </div>
