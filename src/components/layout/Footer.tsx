@@ -28,7 +28,8 @@ const socialLinks = [
   { name: "LinkedIn", icon: Linkedin, href: "https://linkedin.com/company/galoras" },
   { name: "Twitter", icon: Twitter, href: "https://twitter.com/galoras" },
   { name: "Instagram", icon: Instagram, href: "https://instagram.com/galoras" },
-  { name: "Email", icon: Mail, href: "mailto:hello@galoras.com" },
+  // hello@ is not a mailbox. Every click on this icon bounced.
+  { name: "Email", icon: Mail, href: "mailto:conor@galoras.com" },
 ];
 
 export function Footer() {
