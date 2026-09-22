@@ -1,12 +1,14 @@
-import { Bell, Plus } from 'lucide-react';
+import { Bell, Home, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 
 interface PortalTopBarProps {
   displayName: string;
   tier: string | null;
   fitScore: number;
   avatarUrl: string | null;
+  /** Public profile slug. Absent until the coach is approved and published. */
+  slug?: string | null;
 }
 
 function getTierLabel(tier: string | null): string {
@@ -14,21 +16,35 @@ function getTierLabel(tier: string | null): string {
   return tier.charAt(0).toUpperCase() + tier.slice(1);
 }
 
-export function PortalTopBar({ displayName, tier, fitScore, avatarUrl }: PortalTopBarProps) {
+export function PortalTopBar({ displayName, tier, fitScore, avatarUrl, slug }: PortalTopBarProps) {
   const tierLabel = getTierLabel(tier);
 
   return (
     <header className="h-16 border-b border-border bg-card flex items-center justify-between px-6">
-      {/* Left side */}
-      <div className="flex items-center gap-4">
-        <Button variant="outline" size="sm" className="border-border text-muted-foreground hover:text-white hover:bg-white/5">
-          <Plus className="h-4 w-4 mr-1.5" />
-          New Feed
-        </Button>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>Work</span>
-          <span className="text-primary font-medium">| 3 RE</span>
-        </div>
+      {/* Left side.
+          Was a "New Feed" button and a "Work | 3 RE" counter, neither of which
+          did anything. Replaced with the two things a coach in here actually
+          wants: out to the site, and a look at their own public page. */}
+      <div className="flex items-center gap-2">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:text-white hover:bg-white/5 transition-colors"
+        >
+          <Home className="h-3.5 w-3.5" />
+          Galoras
+        </Link>
+
+        {slug && (
+          <a
+            href={`/coach/${slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg border border-primary/40 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/10 transition-colors"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            View my page
+          </a>
+        )}
       </div>
 
       {/* Right side */}
