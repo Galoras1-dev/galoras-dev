@@ -19,6 +19,8 @@ import {
   Target,
   Plus,
   Trash2,
+  Upload,
+  Loader2,
 } from 'lucide-react';
 
 interface ProofPoint {
@@ -53,6 +55,68 @@ export function CoachProfileEditor({ coachProfile }: CoachProfileEditorProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState<null | 'avatar_url' | 'profile_image_url'>(null);
+
+  // ── Photo upload ────────────────────────────────────────────────────────────
+  //
+  // Both image fields were URL-only, which meant a headshot had to be put into
+  // storage by hand and the address pasted in. Nobody outside this office was
+  // ever going to do that.
+  //
+  // The coach is signed in by the time they reach this screen, and the
+  // coach-photos bucket's insert policy is roles = authenticated, so a direct
+  // client upload is enough — no edge function needed.
+  //
+  // The URL box stays. Someone who already hosts their headshot somewhere can
+  // still paste it, and if the upload ever fails they are not stuck.
+  const uploadPhoto = async (
+    field: 'avatar_url' | 'profile_image_url',
+    file: File | undefined,
+  ) => {
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({ title: 'That is not an image', description: 'Use a JPG or PNG.', variant: 'destructive' });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: 'That photo is too big',
+        description: 'Keep it under 5MB. A phone photo usually needs resizing.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setUploading(field);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const owner = auth?.user?.id ?? coachProfile?.id ?? 'unknown';
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `${owner}/${field}-${Date.now()}.${ext}`;
+
+      const { error: upErr } = await supabase.storage
+        .from('coach-photos')
+        .upload(path, file, { cacheControl: '3600', upsert: true, contentType: file.type });
+
+      if (upErr) throw upErr;
+
+      const { data: pub } = supabase.storage.from('coach-photos').getPublicUrl(path);
+      if (!pub?.publicUrl) throw new Error('Uploaded, but no public URL came back.');
+
+      updateField(field, pub.publicUrl);
+      toast({ title: 'Photo uploaded', description: 'Remember to hit Save.' });
+    } catch (err: any) {
+      console.error('Photo upload failed:', err);
+      toast({
+        title: 'Upload failed',
+        description: err?.message ?? 'Something went wrong. You can still paste a URL instead.',
+        variant: 'destructive',
+      });
+    } finally {
+      setUploading(null);
+    }
+  };
 
   const [form, setForm] = useState({
     display_name: '',
@@ -256,15 +320,39 @@ export function CoachProfileEditor({ coachProfile }: CoachProfileEditorProps) {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label className={labelClass}>Profile Image URL</Label>
-              <Input className="bg-card border-border" value={form.profile_image_url} onChange={(e) => updateField('profile_image_url', e.target.value)} />
+              <Label className={labelClass}>Profile Image</Label>
+              <Input className="bg-card border-border" value={form.profile_image_url} onChange={(e) => updateField('profile_image_url', e.target.value)} placeholder="Upload below, or paste a URL" />
+              <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-primary hover:underline">
+                {uploading === 'profile_image_url'
+                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…</>
+                  : <><Upload className="h-3.5 w-3.5" /> Upload a photo</>}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={uploading !== null}
+                  onChange={(e) => { uploadPhoto('profile_image_url', e.target.files?.[0]); e.currentTarget.value = ''; }}
+                />
+              </label>
               {form.profile_image_url && (
                 <img src={form.profile_image_url} alt="Profile preview" className="h-16 w-16 rounded-lg object-cover mt-1 border border-border" />
               )}
             </div>
             <div className="space-y-1.5">
-              <Label className={labelClass}>Avatar URL</Label>
-              <Input className="bg-card border-border" value={form.avatar_url} onChange={(e) => updateField('avatar_url', e.target.value)} />
+              <Label className={labelClass}>Avatar</Label>
+              <Input className="bg-card border-border" value={form.avatar_url} onChange={(e) => updateField('avatar_url', e.target.value)} placeholder="Upload below, or paste a URL" />
+              <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-primary hover:underline">
+                {uploading === 'avatar_url'
+                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…</>
+                  : <><Upload className="h-3.5 w-3.5" /> Upload a photo</>}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  disabled={uploading !== null}
+                  onChange={(e) => { uploadPhoto('avatar_url', e.target.files?.[0]); e.currentTarget.value = ''; }}
+                />
+              </label>
               {form.avatar_url && (
                 <img src={form.avatar_url} alt="Avatar preview" className="h-16 w-16 rounded-full object-cover mt-1 border border-border" />
               )}
