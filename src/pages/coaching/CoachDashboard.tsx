@@ -249,6 +249,7 @@ export default function CoachDashboard() {
           tier={coachProfile.tier}
           fitScore={fitScore}
           avatarUrl={coachProfile.avatar_url}
+          slug={coachProfile.slug}
         />
 
         <main className="flex-1 overflow-y-auto p-6">
