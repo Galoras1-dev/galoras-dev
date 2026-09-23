@@ -320,26 +320,7 @@ export function CoachProfileEditor({ coachProfile }: CoachProfileEditorProps) {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label className={labelClass}>Profile Image</Label>
-              <Input className="bg-card border-border" value={form.profile_image_url} onChange={(e) => updateField('profile_image_url', e.target.value)} placeholder="Upload below, or paste a URL" />
-              <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-primary hover:underline">
-                {uploading === 'profile_image_url'
-                  ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…</>
-                  : <><Upload className="h-3.5 w-3.5" /> Upload a photo</>}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  disabled={uploading !== null}
-                  onChange={(e) => { uploadPhoto('profile_image_url', e.target.files?.[0]); e.currentTarget.value = ''; }}
-                />
-              </label>
-              {form.profile_image_url && (
-                <img src={form.profile_image_url} alt="Profile preview" className="h-16 w-16 rounded-lg object-cover mt-1 border border-border" />
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label className={labelClass}>Avatar</Label>
+              <Label className={labelClass}>Photo</Label>
               <Input className="bg-card border-border" value={form.avatar_url} onChange={(e) => updateField('avatar_url', e.target.value)} placeholder="Upload below, or paste a URL" />
               <label className="inline-flex items-center gap-2 cursor-pointer text-xs font-semibold text-primary hover:underline">
                 {uploading === 'avatar_url'
@@ -353,8 +334,11 @@ export function CoachProfileEditor({ coachProfile }: CoachProfileEditorProps) {
                   onChange={(e) => { uploadPhoto('avatar_url', e.target.files?.[0]); e.currentTarget.value = ''; }}
                 />
               </label>
+              <p className="text-xs text-muted-foreground">
+                Shown on your public profile and in the coach directory.
+              </p>
               {form.avatar_url && (
-                <img src={form.avatar_url} alt="Avatar preview" className="h-16 w-16 rounded-full object-cover mt-1 border border-border" />
+                <img src={form.avatar_url} alt="Photo preview" className="h-16 w-16 rounded-full object-cover mt-1 border border-border" />
               )}
             </div>
           </div>

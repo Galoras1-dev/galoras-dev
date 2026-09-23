@@ -39,6 +39,9 @@ type CoachProfileData = {
   lifecycle_status: string | null;
   booking_url: string | null;
   avatar_url: string | null;
+  /** Legacy second image column. The editor exposes both; this page reads
+   *  avatar_url first and falls back, so a photo saved in either field shows. */
+  profile_image_url: string | null;
   video_url: string | null;
 };
 
@@ -164,7 +167,7 @@ export default function CoachProfile() {
       let query = supabase
         .from("coaches")
         .select(
-          "id, slug, display_name, headline, bio, linkedin_url, positioning_statement, methodology, coaching_style, engagement_format, primary_pillar, proof_points, audience, tier, lifecycle_status, booking_url, avatar_url, video_url"
+          "id, slug, display_name, headline, bio, linkedin_url, positioning_statement, methodology, coaching_style, engagement_format, primary_pillar, proof_points, audience, tier, lifecycle_status, booking_url, avatar_url, profile_image_url, video_url"
         )
         .eq("lifecycle_status", "published");
 
@@ -489,10 +492,10 @@ export default function CoachProfile() {
                   {/* Right: sticky sidebar */}
                   <div className="md:sticky md:top-24 space-y-4">
                     <div className="rounded-2xl border border-border bg-card p-6">
-                      {coach.avatar_url && (
+                      {(coach.avatar_url || coach.profile_image_url) && (
                         <div className="mb-5">
                           <img
-                            src={coach.avatar_url}
+                            src={coach.avatar_url || coach.profile_image_url || ""}
                             alt={coach.display_name || "Coach"}
                             className="w-full rounded-xl object-cover object-top aspect-square max-h-64"
                           />

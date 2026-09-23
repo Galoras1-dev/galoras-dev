@@ -4,7 +4,7 @@ import { AdminLayout } from "@/components/AdminLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, Loader2, Clock, CheckCircle2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Save, Loader2, Clock, CheckCircle2, AlertTriangle, ExternalLink } from "lucide-react";
 
 const LIFECYCLE_OPTIONS = [
   { value: "draft",             label: "Draft",           color: "text-zinc-400" },
@@ -153,6 +153,17 @@ export default function CoachEditorDetail() {
               <span className={`text-sm font-semibold ${currentLifecycle.color}`}>
                 ● {currentLifecycle.label}
               </span>
+            )}
+            {coach.slug && (
+              <a
+                href={`/coach/${coach.slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl border border-[#2a4a6f] px-3 py-2 text-sm font-semibold text-slate-300 hover:text-white hover:border-slate-500 transition-colors"
+              >
+                <ExternalLink className="h-4 w-4" />
+                View live page
+              </a>
             )}
             <Button
               onClick={updateCoach}

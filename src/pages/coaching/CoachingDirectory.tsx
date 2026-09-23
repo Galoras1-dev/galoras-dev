@@ -92,7 +92,7 @@ export default function CoachingDirectory() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("coaches")
-        .select("id, slug, display_name, headline, bio, specialties, audience, avatar_url, cutout_url, booking_url, tier, primary_pillar, engagement_format, coaching_style, coach_products(product_type, title, price_type, price_amount, enterprise_ready)")
+        .select("id, slug, display_name, headline, bio, specialties, audience, avatar_url, cutout_url, profile_image_url, booking_url, tier, primary_pillar, engagement_format, coaching_style, coach_products(product_type, title, price_type, price_amount, enterprise_ready)")
         .eq("lifecycle_status", "published")
         .order("display_name", { ascending: true });
       if (error) throw error;

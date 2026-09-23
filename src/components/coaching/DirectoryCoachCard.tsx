@@ -23,6 +23,7 @@ export type DirectoryCoach = {
   audience: string[] | null;
   avatar_url: string | null;
   cutout_url: string | null;
+  profile_image_url: string | null;
   booking_url: string | null;
   tier: string | null;
   primary_pillar: string | null;
@@ -87,9 +88,9 @@ export function DirectoryCoachCard({
             className="relative h-[240px] bg-background overflow-hidden cursor-pointer"
             onDoubleClick={() => setFlipped(true)}
           >
-            {(coach.cutout_url || coach.avatar_url) ? (
+            {(coach.cutout_url || coach.avatar_url || coach.profile_image_url) ? (
               <img
-                src={coach.cutout_url || coach.avatar_url || ""}
+                src={coach.cutout_url || coach.avatar_url || coach.profile_image_url || ""}
                 alt={coach.display_name || "Coach"}
                 className={`w-full h-full ${coach.cutout_url ? "object-contain object-bottom" : "object-cover object-top"}`}
               />

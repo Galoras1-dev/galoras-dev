@@ -4,7 +4,6 @@ import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 
-const BARNES_PHOTO = "https://qbjuomsmnrclsjhdsjcz.supabase.co/storage/v1/object/public/coach-images/Barnes_Lam_-Removebg_BusinessPortraits.ca__1_-removebg-preview.png";
 const MITESH_PHOTO = "https://qbjuomsmnrclsjhdsjcz.supabase.co/storage/v1/object/public/coach-images/Outside_Blue_Mitesh-removebg-preview.png";
 
 
@@ -12,19 +11,9 @@ const advisors = [
   { initials: "TBA", name: "Advisory Board", note: "Being established. Senior, credible, strategic." },
 ];
 
+// Static showcase list. The homepage keeps its own copy in
+// src/components/FeaturedCoaches.tsx — remove a coach from both.
 const coaches = [
-  {
-    name: "Barnes Lam",
-    title: "Master Coach",
-    slug: "barnes-lam",
-    photo: BARNES_PHOTO,
-    positioning: "30+ years across telecom, SaaS, and AI. Works with founders and CEOs when growth has stalled and the reasons are not obvious.",
-    outcomes: [
-      "Execution clarity for founders navigating commercial pressure",
-      "Leadership teams aligned and operating under real conditions",
-      "Revenue and growth bottlenecks identified and resolved",
-    ],
-  },
   {
     name: "Mitesh Kapadia",
     title: "Master Coach",

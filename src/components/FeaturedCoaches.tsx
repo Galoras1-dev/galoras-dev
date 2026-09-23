@@ -3,14 +3,10 @@ import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+// Hand-picked for the homepage. This list is deliberately static — it is a
+// showcase, not the directory. Anyone removed from Galoras must be removed
+// here and in src/pages/About.tsx, which keeps its own copy.
 const COACHES = [
-  {
-    name: "Barnes Lam",
-    title: "Master Coach",
-    slug: "barnes-lam",
-    photo:
-      "https://qbjuomsmnrclsjhdsjcz.supabase.co/storage/v1/object/public/coach-images/Barnes_Lam_-Removebg_BusinessPortraits.ca__1_-removebg-preview.png",
-  },
   {
     name: "Mitesh Kapadia",
     title: "Master Coach",
@@ -27,7 +23,8 @@ export function FeaturedCoaches() {
   const [colorizing, setColorizing] = useState(false);
 
   useEffect(() => {
-    if (colorizing) return;
+    // Nothing to rotate between while there is a single featured coach.
+    if (colorizing || COACHES.length < 2) return;
     const interval = setInterval(() => {
       setFading(true);
       setTimeout(() => {
@@ -144,9 +141,9 @@ export function FeaturedCoaches() {
               </Link>
             </div>
 
-            {/* Dot indicators */}
+            {/* Dot indicators — only meaningful with more than one coach */}
             <div className="flex gap-2">
-              {COACHES.map((c, i) => (
+              {COACHES.length > 1 && COACHES.map((c, i) => (
                 <button
                   key={i}
                   onClick={() => {
