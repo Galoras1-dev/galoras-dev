@@ -1,0 +1,1144 @@
+import { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Layout } from "@/components/layout";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { useTags } from "@/hooks/useTags";
+import { useProductTypes } from "@/hooks/useProductTypes";
+import { CoachTierPayment } from "@/components/coaching/CoachTierPayment";
+
+const storageKey = (uid: string) => `galoras_coach_onboarding_${uid}`;
+
+// ── Keeping an invited coach's work alive across a refresh ───────────────────
+//
+// OnboardRedirect hands the token over in router state, which keeps it out of
+// the URL, history and referer headers. But router state does not survive a
+// reload, and an invited coach has no account to fall back on - so a refresh
+// dropped them on the "invalid link" screen with everything they had typed
+// gone. Recovery was to find the original email and click the link again.
+//
+// Mirror the token into sessionStorage on arrival and read it back on mount.
+// Per tab, cleared when the tab closes, never written to a URL.
+const INVITE_TOKEN_KEY = "galoras_onboarding_token";
+const INVITE_DRAFT_KEY = "galoras_coach_onboarding_invite";
+
+function readInviteToken(stateToken: string | null): string | null {
+  try {
+    if (stateToken) {
+      const previous = sessionStorage.getItem(INVITE_TOKEN_KEY);
+      // A different invitation opened in the same tab: do not restore the
+      // previous coach's draft over this one.
+      if (previous && previous !== stateToken) {
+        sessionStorage.removeItem(INVITE_DRAFT_KEY);
+      }
+      sessionStorage.setItem(INVITE_TOKEN_KEY, stateToken);
+      return stateToken;
+    }
+    return sessionStorage.getItem(INVITE_TOKEN_KEY);
+  } catch {
+    // Storage blocked (private mode, locked-down browser). Behave exactly as
+    // before rather than failing: the token still works, a refresh still loses it.
+    return stateToken;
+  }
+}
+
+function clearInviteStorage() {
+  try {
+    sessionStorage.removeItem(INVITE_TOKEN_KEY);
+    sessionStorage.removeItem(INVITE_DRAFT_KEY);
+  } catch { /* nothing to clear */ }
+}
+
+const TIER_OPTIONS = [
+  { key: "pro" as const,    name: "Pro",    price: "$49/month",  desc: "Entry-level visibility. Get listed and start booking.",                                         comingSoon: false },
+  { key: "elite" as const,  name: "Elite",  price: "$99/month",  desc: "Priority exposure, enhanced profile visibility, and exclusive platform access.", badge: "Most Popular", comingSoon: false },
+  { key: "master" as const, name: "Master", price: "$197/month", desc: "Featured placement. Enterprise delivery. We back you.",                                        comingSoon: false },
+];
+
+// ── Tag pill component ────────────────────────────────────────────────────────
+function TagPills({ family, selected, onChange, single = false }: {
+  family: string; selected: string[]; onChange: (v: string[]) => void; single?: boolean;
+}) {
+  const { getTagsByFamily } = useTags();
+  const items = getTagsByFamily(family);
+  const toggle = (key: string) => {
+    if (single) { onChange(selected[0] === key ? [] : [key]); return; }
+    onChange(selected.includes(key) ? selected.filter(k => k !== key) : [...selected, key]);
+  };
+  return (
+    <div className="flex flex-wrap gap-2 mt-2">
+      {items.map(t => (
+        <button key={t.tag_key} type="button" onClick={() => toggle(t.tag_key)}
+          className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+            selected.includes(t.tag_key)
+              ? "bg-primary text-primary-foreground border-primary"
+              : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+          }`}>
+          {t.tag_label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+interface PendingProduct {
+  product_type: string;
+  title: string;
+  outcome_statement: string;
+  price_type: "enquiry" | "fixed" | "range";
+  // All three are in CENTS, matching coach_products.price_amount /
+  // price_range_min / price_range_max. The inputs take dollars and convert.
+  price_cents: number | null;
+  price_range_min: number | null;
+  price_range_max: number | null;
+  outcome_tags: string[];
+  audience_tags: string[];
+  format_tags: string[];
+}
+
+export default function CoachOnboarding() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  // Desktop layout at 900px+ (wider than useIsMobile's 768px to account for split-screen)
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 900);
+  useEffect(() => {
+    const mql = window.matchMedia("(min-width: 900px)");
+    const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, []);
+  const isMobile = !isDesktop;
+
+  // Lazy initialiser so it runs once, before the effects - TOTAL_STEPS and the
+  // mount effect both need the right value on the first render after a reload.
+  const stateToken = (location.state as { token?: string } | null)?.token ?? null;
+  const [token] = useState<string | null>(() => readInviteToken(stateToken));
+
+  const [state, setState] = useState<"loading" | "invalid" | "form" | "submitting" | "success">("loading");
+  const [step, setStep] = useState(1);
+  const [activeTier, setActiveTier] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const TOTAL_STEPS = token ? 5 : 6;
+
+  // Step 1
+  const [fullName, setFullName] = useState("");
+  const [bio, setBio] = useState("");
+  const [currentRole, setCurrentRole] = useState("");
+  const [linkedinUrl, setLinkedinUrl] = useState("");
+  const [bookingUrl, setBookingUrl] = useState("");
+
+  // ── The five questions ──────────────────────────────────────────────────────
+  // These replace the free-text bio box. The coach answers in their own words,
+  // uploads one document, and the platform drafts the profile from both. The
+  // bio box asked a coach to be their own copywriter, which is why every
+  // profile that came through it read the same.
+  const [qPractice, setQPractice] = useState("");
+  const [qAudience, setQAudience] = useState("");
+  const [qMisdiagnosis, setQMisdiagnosis] = useState("");
+  const [qProof, setQProof] = useState("");
+  const [qMethod, setQMethod] = useState("");
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState("");
+  const [generated, setGenerated] = useState<Record<string, any> | null>(null);
+
+  // Step 2 — tag keys
+  const [specialtyTags, setSpecialtyTags] = useState<string[]>([]);
+  const [audienceTags, setAudienceTags] = useState<string[]>([]);
+  const [styleTags, setStyleTags] = useState<string[]>([]);
+  const [industryTags, setIndustryTags] = useState<string[]>([]);
+
+  // Step 3
+  const [availabilityTag, setAvailabilityTag] = useState<string[]>([]);
+  const [enterpriseTags, setEnterpriseTags] = useState<string[]>([]);
+  const [credentialTags, setCredentialTags] = useState<string[]>([]);
+
+  // Step 4 — pending product
+  const [pendingProduct, setPendingProduct] = useState<PendingProduct>({
+    product_type: "",
+    title: "",
+    outcome_statement: "",
+    price_type: "enquiry",
+    price_cents: null,
+    price_range_min: null,
+    price_range_max: null,
+    outcome_tags: [],
+    audience_tags: [],
+    format_tags: [],
+  });
+
+  const { types: productTypes } = useProductTypes();
+
+  // Restore a draft saved earlier in this browser session. Returns true if a
+  // draft was found and applied, in which case the caller must not overwrite
+  // the restored fields with anything else.
+  const applySavedDraft = (key: string): boolean => {
+    const saved = (() => {
+      try {
+        const raw = sessionStorage.getItem(key);
+        return raw ? JSON.parse(raw) : null;
+      } catch { return null; }
+    })();
+
+    if (!saved || !(saved.step > 1)) return false;
+
+    const fd = saved.formData ?? {};
+    setFullName(fd.fullName ?? "");
+    setBio(fd.bio ?? "");
+    setCurrentRole(fd.currentRole ?? "");
+    setLinkedinUrl(fd.linkedinUrl ?? "");
+    setBookingUrl(fd.bookingUrl ?? "");
+    setSpecialtyTags(fd.specialtyTags ?? []);
+    setAudienceTags(fd.audienceTags ?? []);
+    setStyleTags(fd.styleTags ?? []);
+    setIndustryTags(fd.industryTags ?? []);
+    setAvailabilityTag(fd.availabilityTag ?? []);
+    setEnterpriseTags(fd.enterpriseTags ?? []);
+    setCredentialTags(fd.credentialTags ?? []);
+    if (fd.pendingProduct) setPendingProduct(fd.pendingProduct);
+    setStep(saved.step);
+    return true;
+  };
+
+  useEffect(() => {
+    if (token) { validateToken(); return; }
+    // No token — auth-based flow (new coach signup)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) { setState("invalid"); return; }
+      setUserId(session.user.id);
+
+      // Restore progress saved in this browser session
+      if (applySavedDraft(storageKey(session.user.id))) {
+        setState("form");
+        return;
+      }
+
+      supabase.from("profiles")
+        .select("full_name, user_role, linkedin_url")
+        .eq("id", session.user.id)
+        .single()
+        .then(({ data }) => {
+          if (data) {
+            setFullName(data.full_name || "");
+            setCurrentRole(data.user_role || "");
+            setLinkedinUrl(data.linkedin_url || "");
+          }
+          setState("form");
+        });
+    });
+  }, [token]);
+
+  const validateToken = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke("validate-onboarding-token", { body: { token } });
+      if (error || data?.error) { clearInviteStorage(); setState("invalid"); return; }
+
+      // A draft from earlier in this session wins over the application record:
+      // it is what the coach typed, the application is only the seed.
+      if (applySavedDraft(INVITE_DRAFT_KEY)) { setState("form"); return; }
+
+      const app = data.application;
+      setFullName(app.full_name || "");
+      setBio(app.bio || "");
+      setLinkedinUrl(app.linkedin_url || "");
+      setCurrentRole(app.current_role || "");
+      setState("form");
+    } catch {
+      setState("invalid");
+    }
+  };
+
+  // The five questions, in the order they are asked. Order matters: the proof
+  // comes before the method, because a profile that leads with method before
+  // earning the right to it reads like every other coach on the internet.
+  const QUESTIONS = [
+    {
+      key: "practice",
+      label: "How would you describe your coaching practice today?",
+      help: "Where you are now, and what you bring to it. We'll pick up your career history from your document, so no need to repeat it here.",
+      placeholder: "I'm currently...",
+      rows: 4, value: qPractice, set: setQPractice,
+    },
+    {
+      key: "audience",
+      label: "Who do you most want to work with?",
+      help: "Be specific. \u201cFounders\u201d isn't specific \u2014 \u201cfirst-time founders who've just raised outside money\u201d is.",
+      placeholder: "The people I work best with are...",
+      rows: 4, value: qAudience, set: setQAudience,
+    },
+    {
+      key: "misdiagnosis",
+      label: "What do your clients get wrong about their own problem?",
+      help: "What do they think is holding them back, and what actually is? This is the question that makes your profile an argument rather than a biography.",
+      placeholder: "Most people who come to me believe...",
+      rows: 4, value: qMisdiagnosis, set: setQMisdiagnosis,
+    },
+    {
+      key: "proof",
+      label: "What have you done that nobody can argue with?",
+      help: "The proof line. Numbers, names, scale. Be specific rather than modest \u2014 this is the line that makes someone trust the rest of the page.",
+      placeholder: "I've...",
+      rows: 3, value: qProof, set: setQProof,
+    },
+    {
+      key: "method",
+      label: "How do you work, and what do you call it?",
+      help: "Named frameworks if you have them. If you don't have a name for it, describe how you actually run a session and what you refuse to do.",
+      placeholder: "The way I work is...",
+      rows: 5, value: qMethod, set: setQMethod,
+    },
+  ];
+
+  // ── Validation per step ──────────────────────────────────────────────────────
+  const validateStep = (): boolean => {
+    if (step === 1) {
+      if (!fullName.trim()) {
+        toast({ title: "Full name is required", variant: "destructive" }); return false;
+      }
+      const unanswered = QUESTIONS.find(q => q.value.trim().length < 40);
+      if (unanswered) {
+        toast({
+          title: "One more answer needed",
+          description: unanswered.label,
+          variant: "destructive",
+        });
+        return false;
+      }
+      if (!docFile) {
+        toast({ title: "Upload one PDF \u2014 a resume, biography, or your LinkedIn profile", variant: "destructive" }); return false;
+      }
+      if (!photoFile) {
+        toast({ title: "Add a photo", variant: "destructive" }); return false;
+      }
+    }
+    if (step === 2) {
+      if (specialtyTags.length < 2) {
+        toast({ title: "Select at least 2 specialty tags", variant: "destructive" }); return false;
+      }
+      if (audienceTags.length < 1) {
+        toast({ title: "Select at least 1 audience tag", variant: "destructive" }); return false;
+      }
+    }
+    if (step === 4) {
+      if (!pendingProduct.product_type) {
+        toast({ title: "Select a product type", variant: "destructive" }); return false;
+      }
+      if (!pendingProduct.title.trim()) {
+        toast({ title: "Product title is required", variant: "destructive" }); return false;
+      }
+      if (pendingProduct.outcome_tags.length < 1) {
+        toast({ title: "Select at least 1 outcome tag", variant: "destructive" }); return false;
+      }
+      // A price the coach types must survive to the database. Catching it here
+      // is the difference between a clear message now and a product that shows
+      // no price at all with nothing to explain why.
+      if (pendingProduct.price_type === "fixed" && !pendingProduct.price_cents) {
+        toast({ title: "Enter a price, or choose Enquiry", variant: "destructive" }); return false;
+      }
+      if (pendingProduct.price_type === "range") {
+        const { price_range_min: lo, price_range_max: hi } = pendingProduct;
+        if (!lo || !hi) {
+          toast({ title: "Enter both ends of the range, or choose Enquiry", variant: "destructive" }); return false;
+        }
+        if (lo >= hi) {
+          toast({ title: "The 'To' price must be higher than the 'From' price", variant: "destructive" }); return false;
+        }
+      }
+      if (pendingProduct.audience_tags.length < 1) {
+        toast({ title: "Select at least 1 audience tag for the product", variant: "destructive" }); return false;
+      }
+      if (pendingProduct.format_tags.length < 1) {
+        toast({ title: "Select at least 1 format tag", variant: "destructive" }); return false;
+      }
+    }
+    return true;
+  };
+
+  const persistProgress = (nextStep: number) => {
+    // An invited coach has no account and therefore no userId. Keying only on
+    // userId meant invited coaches got no draft saving at all, which is the
+    // half of the refresh bug that loses everything they typed.
+    const key = token ? INVITE_DRAFT_KEY : (userId ? storageKey(userId) : null);
+    if (!key) return;
+    try {
+      sessionStorage.setItem(key, JSON.stringify({
+        step: nextStep,
+        formData: {
+          fullName, bio, currentRole, linkedinUrl, bookingUrl,
+          specialtyTags, audienceTags, styleTags, industryTags,
+          availabilityTag, enterpriseTags, credentialTags, pendingProduct,
+        },
+      }));
+    } catch { /* private mode or quota — proceed without a draft */ }
+  };
+
+  // Read a File as base64 without the data: prefix, which is what the Anthropic
+  // document block wants.
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result || "");
+        resolve(result.slice(result.indexOf(",") + 1));
+      };
+      reader.onerror = () => reject(new Error("Could not read that file"));
+      reader.readAsDataURL(file);
+    });
+
+  // Upload the photo to the coach-photos bucket and hand back a public URL.
+  const uploadPhoto = async (file: File, who: string): Promise<string | null> => {
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const path = `${who}/avatar-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage
+      .from("coach-photos").upload(path, file, { upsert: true });
+    if (error) {
+      console.error("photo upload failed:", error);
+      return null;
+    }
+    const { data } = supabase.storage.from("coach-photos").getPublicUrl(path);
+    return data?.publicUrl ?? null;
+  };
+
+  const handleNext = async () => {
+    if (!validateStep()) return;
+
+    // Leaving step 1 is where the profile gets drafted. Everything after this
+    // is the coach confirming and correcting what came back.
+    if (step === 1 && !generated) {
+      setGenerating(true);
+      setGenError("");
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const who = sessionData?.session?.user?.id || userId || "anon";
+
+        const documentBase64 = await fileToBase64(docFile!);
+        const avatarUrl = photoFile ? await uploadPhoto(photoFile, who) : null;
+
+        const { data, error } = await supabase.functions.invoke("generate-coach-profile", {
+          body: {
+            userId: sessionData?.session?.user?.id ?? userId ?? null,
+            email: sessionData?.session?.user?.email ?? null,
+            fullName: fullName.trim(),
+            avatarUrl,
+            documentBase64,
+            documentMediaType: docFile!.type || "application/pdf",
+            answers: {
+              practice: qPractice.trim(),
+              audience: qAudience.trim(),
+              misdiagnosis: qMisdiagnosis.trim(),
+              proof: qProof.trim(),
+              method: qMethod.trim(),
+            },
+          },
+        });
+
+        // supabase.functions.invoke RESOLVES on a non-2xx rather than throwing,
+        // so the error has to be read off the result. Missing this is what let
+        // analyze-coach-application fail silently for months.
+        if (error) throw new Error(error.message || "Generation failed");
+        if (!data?.ok) throw new Error(data?.error || "Generation returned nothing");
+
+        setGenerated(data.generated);
+        if (data.generated?.bio) setBio(data.generated.bio);
+      } catch (e: any) {
+        setGenError(
+          `We couldn't draft your profile: ${e?.message || e}. Your answers are saved \u2014 try Continue again, and if it keeps failing, contact us and we'll write it by hand.`
+        );
+        setGenerating(false);
+        return;
+      }
+      setGenerating(false);
+    }
+
+    const next = step + 1;
+    persistProgress(next);
+    setStep(next);
+  };
+
+  const handleSubmit = async () => {
+    setState("submitting");
+    try {
+      if (token) {
+        // Legacy token-based flow (came via email link post-payment)
+        const { data, error } = await supabase.functions.invoke("complete-onboarding", {
+          body: {
+            token,
+            fullName: fullName.trim(), bio: bio.trim(),
+            linkedinUrl: linkedinUrl.trim() || null,
+            currentRole: currentRole.trim() || null,
+            bookingUrl: bookingUrl.trim() || null,
+            specialtyTags, audienceTags, styleTags, industryTags,
+            availabilityTag: availabilityTag[0] || null,
+            enterpriseTags, credentialTags, pendingProduct,
+          },
+        });
+        if (error || data?.error) throw new Error(data?.error || "Failed to complete onboarding");
+        // Submitted and accepted — the draft and the token have done their job.
+        // Clear them so a refresh on the success screen cannot replay the form.
+        clearInviteStorage();
+        setState("success");
+        toast({ title: "Profile completed!", description: "Your coach profile has been saved successfully." });
+      } else {
+        // Auth-based flow — save directly, then advance to tier selection (Step 6)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error("Not authenticated");
+
+        await supabase.from("profiles").update({
+          full_name: fullName.trim() || null,
+          user_role: currentRole.trim() || null,
+          linkedin_url: linkedinUrl.trim() || null,
+        }).eq("id", session.user.id);
+
+        // Upsert coach application with tag + product data
+        const { data: existing } = await supabase
+          .from("coach_applications").select("id").eq("user_id", session.user.id).maybeSingle();
+        const appData = {
+          user_id: session.user.id,
+          email: session.user.email!,
+          full_name: fullName.trim() || null,
+          bio: bio.trim() || null,
+          current_role: currentRole.trim() || null,
+          linkedin_url: linkedinUrl.trim() || null,
+          booking_url: bookingUrl.trim() || null,
+          specialty_tags: specialtyTags,
+          audience_tags: audienceTags,
+          style_tags: styleTags,
+          industry_tags: industryTags,
+          availability_tag: availabilityTag[0] || null,
+          enterprise_tags: enterpriseTags,
+          credential_tags: credentialTags,
+          pending_product: pendingProduct,
+          onboarding_status: "pending",
+          status: "pending",
+        };
+        if (existing) {
+          await supabase.from("coach_applications").update(appData).eq("id", existing.id);
+        } else {
+          await supabase.from("coach_applications").insert(appData);
+        }
+
+        persistProgress(6);
+        toast({ title: "Profile saved!", description: "Now choose your coach tier." });
+        setState("form");
+        setStep(6);
+      }
+    } catch (err: any) {
+      console.error("Submit error:", err);
+      setState("form");
+      toast({ title: "Submission failed", description: err.message || "Please try again.", variant: "destructive" });
+    }
+  };
+
+  // ── Loading / error / success states ────────────────────────────────────────
+  if (state === "loading") {
+    return (
+      <Layout>
+        <div className="min-h-[60vh] flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto mb-4" />
+            <p className="text-muted-foreground">Validating your invitation...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (state === "invalid") {
+    return (
+      <Layout>
+        <section className="py-16">
+          <div className="container-wide max-w-md mx-auto">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex flex-col items-center text-center gap-4">
+                  <div className="h-16 w-16 rounded-full bg-destructive/10 flex items-center justify-center">
+                    <AlertCircle className="h-8 w-8 text-destructive" />
+                  </div>
+                  <div>
+                    <h1 className="text-xl font-semibold mb-2">Invalid or Expired Link</h1>
+                    <p className="text-muted-foreground">This onboarding link is no longer valid.</p>
+                  </div>
+                  <Button variant="outline" onClick={() => navigate("/")}>Return to Home</Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+      </Layout>
+    );
+  }
+
+  if (state === "success") {
+    return (
+      <Layout>
+        <section className="py-16">
+          <div className="container-wide max-w-md mx-auto">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex flex-col items-center text-center gap-4">
+                  <div className="h-16 w-16 rounded-full bg-green-500/10 flex items-center justify-center">
+                    <CheckCircle className="h-8 w-8 text-green-600" />
+                  </div>
+                  {/* An invited coach has no account, so "sign in to access
+                      your dashboard" sent them to a login screen they had no
+                      credentials for — the same dead end that was just removed
+                      from the approval email, and this one appears within
+                      seconds of finishing, before the email arrives. It is the
+                      more likely first impression of the two.
+
+                      Self-signup coaches DO have an account and a tier step
+                      still to come, so they keep the dashboard route. */}
+                  {token ? (
+                    <>
+                      <div>
+                        <h1 className="text-xl font-semibold mb-2">That's everything — thank you.</h1>
+                        <p className="text-muted-foreground">
+                          Your profile is with us now. We'll review it and send you a link to your live
+                          page shortly. If anything needs changing, just reply to that email and we'll
+                          take care of it.
+                        </p>
+                      </div>
+                      <Button variant="outline" onClick={() => navigate("/coaching/coaches")}>
+                        See the other coaches
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <h1 className="text-xl font-semibold mb-2">Welcome to Galoras!</h1>
+                        <p className="text-muted-foreground">Your coach profile has been completed. You can now sign in to access your dashboard.</p>
+                      </div>
+                      <Button onClick={() => navigate("/login")}>Sign In</Button>
+                    </>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+      </Layout>
+    );
+  }
+
+  // ── Form ─────────────────────────────────────────────────────────────────────
+  const pp = pendingProduct;
+  const setPP = (patch: Partial<PendingProduct>) => setPendingProduct(prev => ({ ...prev, ...patch }));
+
+  const stepTitles = token
+    ? ["Coach Identity", "Positioning", "Commercial Readiness", "Your First Product", "Review & Submit"]
+    : ["Coach Identity", "Positioning", "Commercial Readiness", "Your First Product", "Review & Save", "Choose Your Tier"];
+
+  const stepDescriptions = [
+    "Tell us who you are and how to find you.",
+    "Define your niche, audience, and coaching style.",
+    "Set your availability, credentials, and enterprise capability.",
+    "Add your first coaching product or programme.",
+    "Review your profile before saving.",
+    "Pick the tier that fits where you are right now.",
+  ];
+
+  return (
+    <Layout>
+      <section className="min-h-screen bg-zinc-950 py-12 px-4">
+        <div className={`mx-auto ${isMobile ? "max-w-lg" : "max-w-6xl"}`}>
+
+          {/* Page header */}
+          <div className="mb-10">
+            <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-2">Coach Onboarding</p>
+            <h1 className={`font-display font-black text-white uppercase tracking-tight ${isMobile ? "text-2xl" : "text-4xl"}`}>
+              Complete Your Coach Profile
+            </h1>
+          </div>
+
+          <div className={`flex gap-8 items-start ${isMobile ? "flex-col" : "flex-row"}`}>
+
+            {/* ── Left sidebar: vertical stepper (desktop only) ── */}
+            {!isMobile && (
+              <aside className="flex flex-col gap-1 w-64 shrink-0 sticky top-24">
+                {stepTitles.map((title, i) => {
+                  const n = i + 1;
+                  const done = n < step;
+                  const active = n === step;
+                  return (
+                    <div key={n} className="flex items-start gap-3 px-3 py-3 rounded-xl transition-colors">
+                      <div className={`mt-0.5 w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-bold transition-colors ${
+                        done    ? "bg-primary text-primary-foreground" :
+                        active  ? "bg-primary/20 border-2 border-primary text-primary" :
+                                  "bg-zinc-800 text-zinc-500"
+                      }`}>
+                        {done ? <CheckCircle className="h-4 w-4" /> : n}
+                      </div>
+                      <div>
+                        <p className={`text-sm font-semibold leading-tight ${active ? "text-white" : done ? "text-zinc-400" : "text-zinc-600"}`}>
+                          {title}
+                        </p>
+                        {active && (
+                          <p className="text-xs text-zinc-500 mt-0.5 leading-snug">{stepDescriptions[i]}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </aside>
+            )}
+
+            {/* ── Right: form card ── */}
+            <div className="flex-1 min-w-0 w-full">
+              {/* Mobile: compact progress bar + step label */}
+              {isMobile && (
+                <div className="mb-5">
+                  <div className="flex justify-between text-xs text-zinc-500 mb-2">
+                    <span className="font-medium text-white">{stepTitles[step - 1]}</span>
+                    <span>Step {step} of {TOTAL_STEPS}</span>
+                  </div>
+                  <div className="flex gap-1">
+                    {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map(n => (
+                      <div key={n} className={`h-1.5 flex-1 rounded-full transition-colors ${n <= step ? "bg-primary" : "bg-zinc-800"}`} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <Card className="bg-zinc-900 border-zinc-700 shadow-2xl">
+                <CardHeader className="pb-4 border-b border-zinc-800">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold text-primary uppercase tracking-widest mb-1">
+                        Step {step} of {TOTAL_STEPS}
+                      </p>
+                      <CardTitle className="text-2xl text-white">{stepTitles[step - 1]}</CardTitle>
+                      <CardDescription className="text-zinc-400 mt-1 text-sm">
+                        {stepDescriptions[step - 1]}
+                      </CardDescription>
+                    </div>
+                    {/* Desktop progress dots */}
+                    {!isMobile && (
+                      <div className="flex gap-1.5 shrink-0">
+                        {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map(n => (
+                          <div key={n} className={`rounded-full transition-all ${
+                            n < step  ? "w-2 h-2 bg-primary" :
+                            n === step? "w-5 h-2 bg-primary" :
+                                        "w-2 h-2 bg-zinc-700"
+                          }`} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+
+                <CardContent className="pt-6 space-y-6">
+
+                  {/* ── Step 1 ── */}
+                  {step === 1 && (
+                    <>
+                      <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-5`}>
+                        <div className="space-y-2">
+                          <Label className="text-zinc-300 text-sm font-medium">Full Name *</Label>
+                          <Input id="fullName" value={fullName} onChange={e => setFullName(e.target.value)}
+                            placeholder="Your full name" required
+                            className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-11 text-base focus-visible:ring-primary" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-zinc-300 text-sm font-medium">Current Role</Label>
+                          <Input id="currentRole" value={currentRole} onChange={e => setCurrentRole(e.target.value)}
+                            placeholder="e.g. Executive Coach"
+                            className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-11 text-base focus-visible:ring-primary" />
+                        </div>
+                      </div>
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+                        <p className="text-sm text-zinc-300">
+                          Five questions and one document. We write the first draft of your
+                          profile from your answers — you edit it before anything is published.
+                        </p>
+                      </div>
+
+                      {QUESTIONS.map(q => (
+                        <div key={q.key} className="space-y-2">
+                          <Label className="text-zinc-300 text-sm font-medium">{q.label} *</Label>
+                          <p className="text-xs text-zinc-500 leading-relaxed">{q.help}</p>
+                          <Textarea
+                            id={q.key}
+                            rows={q.rows}
+                            value={q.value}
+                            onChange={e => q.set(e.target.value)}
+                            placeholder={q.placeholder}
+                            className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 text-base focus-visible:ring-primary resize-none"
+                          />
+                        </div>
+                      ))}
+
+                      <div className="space-y-2">
+                        <Label className="text-zinc-300 text-sm font-medium">Your document *</Label>
+                        <p className="text-xs text-zinc-500 leading-relaxed">
+                          One PDF — your resume, a biography, or your LinkedIn profile saved
+                          as PDF (on LinkedIn: More → Save to PDF). We read it for your career
+                          history so you don't have to retype it above.
+                        </p>
+                        <Input
+                          id="docFile"
+                          type="file"
+                          accept="application/pdf"
+                          onChange={e => setDocFile(e.target.files?.[0] ?? null)}
+                          className="bg-zinc-800 border-zinc-700 text-white h-11 text-base file:text-zinc-300 file:bg-zinc-700 file:border-0 file:rounded file:px-3 file:py-1 file:mr-3"
+                        />
+                        {docFile && (
+                          <p className="text-xs text-emerald-400">
+                            {docFile.name} — {(docFile.size / 1024 / 1024).toFixed(1)} MB
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-zinc-300 text-sm font-medium">Your photo *</Label>
+                        <p className="text-xs text-zinc-500 leading-relaxed">
+                          A head-and-shoulders photo. This is the first thing anyone sees.
+                        </p>
+                        <Input
+                          id="photoFile"
+                          type="file"
+                          accept="image/*"
+                          onChange={e => setPhotoFile(e.target.files?.[0] ?? null)}
+                          className="bg-zinc-800 border-zinc-700 text-white h-11 text-base file:text-zinc-300 file:bg-zinc-700 file:border-0 file:rounded file:px-3 file:py-1 file:mr-3"
+                        />
+                        {photoFile && (
+                          <p className="text-xs text-emerald-400">{photoFile.name}</p>
+                        )}
+                      </div>
+
+                      {genError && (
+                        <div className="rounded-lg border border-red-900 bg-red-950/40 p-4">
+                          <p className="text-sm text-red-300">{genError}</p>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* ── Step 2 ── */}
+                  {step === 2 && (
+                    <div className="space-y-6">
+                      <div className="space-y-2">
+                        <Label className="text-zinc-300 text-sm font-medium">
+                          Specialty Tags <span className="text-zinc-500 font-normal">(select at least 2)</span>
+                        </Label>
+                        <TagPills family="specialty" selected={specialtyTags} onChange={setSpecialtyTags} />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-zinc-300 text-sm font-medium">
+                          Audience Tags <span className="text-zinc-500 font-normal">(select at least 1)</span>
+                        </Label>
+                        <TagPills family="audience" selected={audienceTags} onChange={setAudienceTags} />
+                      </div>
+                      <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-6`}>
+                        <div className="space-y-2">
+                          <Label className="text-zinc-300 text-sm font-medium">Coaching Style</Label>
+                          <TagPills family="style" selected={styleTags} onChange={setStyleTags} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-zinc-300 text-sm font-medium">Industry Focus</Label>
+                          <TagPills family="industry" selected={industryTags} onChange={setIndustryTags} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Step 3 ── */}
+                  {step === 3 && (
+                    <div className="space-y-6">
+                      <div className="space-y-2">
+                        <Label className="text-zinc-300 text-sm font-medium">Availability</Label>
+                        <TagPills family="availability" selected={availabilityTag} onChange={setAvailabilityTag} single />
+                      </div>
+                      <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-6`}>
+                        <div className="space-y-2">
+                          <Label className="text-zinc-300 text-sm font-medium">Enterprise Capability</Label>
+                          <TagPills family="enterprise" selected={enterpriseTags} onChange={setEnterpriseTags} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-zinc-300 text-sm font-medium">Credentials & Certifications</Label>
+                          <TagPills family="credential" selected={credentialTags} onChange={setCredentialTags} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Step 4 ── */}
+                  {step === 4 && (
+                    <div className="space-y-6">
+                      <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-5`}>
+                        <div className="space-y-2">
+                          <Label className="text-zinc-300 text-sm font-medium">Product Type *</Label>
+                          <Select value={pp.product_type} onValueChange={v => setPP({ product_type: v })}>
+                            <SelectTrigger className="bg-zinc-800 border-zinc-700 text-white h-11 text-base focus:ring-primary">
+                              <SelectValue placeholder="Select type" />
+                            </SelectTrigger>
+                            <SelectContent className="bg-zinc-800 border-zinc-700">
+                              {productTypes.map(t => <SelectItem key={t.slug} value={t.slug} className="text-white">{t.label}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-zinc-300 text-sm font-medium">Title *</Label>
+                          <Input id="prodTitle" value={pp.title} onChange={e => setPP({ title: e.target.value })}
+                            placeholder="e.g. 90-day Leadership Intensive"
+                            className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-11 text-base focus-visible:ring-primary" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-zinc-300 text-sm font-medium">Outcome Statement</Label>
+                        <Textarea id="outcomeStatement" rows={3} value={pp.outcome_statement}
+                          onChange={e => setPP({ outcome_statement: e.target.value })}
+                          placeholder="What will the client achieve?"
+                          className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 text-base focus-visible:ring-primary resize-none" />
+                      </div>
+                      <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-3"} gap-5`}>
+                        <div className="space-y-2">
+                          <Label className="text-zinc-300 text-sm font-medium">
+                            Outcome Tags <span className="text-zinc-500 font-normal">(min 1)</span>
+                          </Label>
+                          <TagPills family="outcome" selected={pp.outcome_tags} onChange={v => setPP({ outcome_tags: v })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-zinc-300 text-sm font-medium">
+                            Audience Tags <span className="text-zinc-500 font-normal">(min 1)</span>
+                          </Label>
+                          <TagPills family="audience" selected={pp.audience_tags} onChange={v => setPP({ audience_tags: v })} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-zinc-300 text-sm font-medium">
+                            Format Tags <span className="text-zinc-500 font-normal">(min 1)</span>
+                          </Label>
+                          <TagPills family="format" selected={pp.format_tags} onChange={v => setPP({ format_tags: v })} />
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <Label className="text-zinc-300 text-sm font-medium">Price Type</Label>
+                        <div className="flex gap-3">
+                          {(["enquiry", "fixed", "range"] as const).map(pt => (
+                            <button key={pt} type="button"
+                              onClick={() => setPP({ price_type: pt, price_cents: null, price_range_min: null, price_range_max: null })}
+                              className={`px-5 py-2.5 rounded-full border text-sm font-medium transition-colors ${
+                                pp.price_type === pt
+                                  ? "bg-primary text-primary-foreground border-primary"
+                                  : "border-zinc-600 text-zinc-400 hover:border-primary/50 hover:text-white"
+                              }`}>
+                              {pt === "enquiry" ? "Enquiry" : pt === "fixed" ? "Fixed Price" : "Price Range"}
+                            </button>
+                          ))}
+                        </div>
+                        {pp.price_type === "fixed" && (
+                          <div className="space-y-2 pt-1">
+                            <Label className="text-zinc-300 text-sm">Price (USD)</Label>
+                            <Input type="number" min={0} placeholder="0"
+                              value={pp.price_cents !== null ? pp.price_cents / 100 : ""}
+                              onChange={e => setPP({ price_cents: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : null })}
+                              className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-11 text-base focus-visible:ring-primary" />
+                          </div>
+                        )}
+                        {pp.price_type === "range" && (
+                          <div className="grid grid-cols-2 gap-4 pt-1">
+                            <div className="space-y-2">
+                              <Label className="text-zinc-300 text-sm">From (USD)</Label>
+                              <Input type="number" min={0} placeholder="0"
+                                value={pp.price_range_min !== null ? pp.price_range_min / 100 : ""}
+                                onChange={e => setPP({ price_range_min: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : null })}
+                                className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-11 text-base focus-visible:ring-primary" />
+                            </div>
+                            <div className="space-y-2">
+                              <Label className="text-zinc-300 text-sm">To (USD)</Label>
+                              <Input type="number" min={0} placeholder="0"
+                                value={pp.price_range_max !== null ? pp.price_range_max / 100 : ""}
+                                onChange={e => setPP({ price_range_max: e.target.value ? Math.round(parseFloat(e.target.value) * 100) : null })}
+                                className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-11 text-base focus-visible:ring-primary" />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Step 5 — Review ── */}
+                  {step === 5 && (
+                    <div className="space-y-4">
+
+                      {/* The drafted profile. Shown first because it is what a
+                          visitor will actually read, and because a coach who
+                          scrolls past it has not reviewed anything. */}
+                      {generated && (
+                        <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900/60 p-4">
+                          <div>
+                            <p className="text-sm font-semibold text-white">Your profile, drafted from your answers</p>
+                            <p className="text-xs text-zinc-500 mt-1">
+                              Edit anything that doesn't sound like you. Nothing is published
+                              until it's approved.
+                            </p>
+                          </div>
+
+                          {Array.isArray(generated.needs_more) && generated.needs_more.length > 0 && (
+                            <div className="rounded border border-amber-900 bg-amber-950/30 p-3">
+                              <p className="text-xs text-amber-300">
+                                We didn't have enough to write: {generated.needs_more.join(", ")}.
+                                You can fill these in later — it won't hold up your application.
+                              </p>
+                            </div>
+                          )}
+
+                          {[
+                            { k: "headline", label: "Headline", rows: 2 },
+                            { k: "positioning_statement", label: "Positioning statement", rows: 4 },
+                            { k: "methodology", label: "How you work", rows: 8 },
+                            { k: "coaching_philosophy", label: "Your philosophy", rows: 3 },
+                            { k: "coaching_style", label: "Your style", rows: 2 },
+                            { k: "bio", label: "Bio", rows: 6 },
+                          ].map(f => (
+                            <div key={f.k} className="space-y-1">
+                              <Label className="text-zinc-300 text-sm font-medium">{f.label}</Label>
+                              <Textarea
+                                rows={f.rows}
+                                value={generated[f.k] ?? ""}
+                                onChange={e => {
+                                  const next = { ...generated, [f.k]: e.target.value };
+                                  setGenerated(next);
+                                  if (f.k === "bio") setBio(e.target.value);
+                                }}
+                                className="bg-zinc-800 border-zinc-700 text-white text-base focus-visible:ring-primary resize-none"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-4`}>
+                        {[
+                          { label: "Name", value: fullName },
+                          { label: "Role", value: currentRole },
+                          { label: "Specialties", value: `${specialtyTags.length} selected` },
+                          { label: "Audience tags", value: `${audienceTags.length} selected` },
+                          { label: "Coaching styles", value: `${styleTags.length} selected` },
+                          { label: "Credentials", value: `${credentialTags.length} selected` },
+                          ...(pp.title ? [
+                            { label: "Product", value: pp.title },
+                            { label: "Product type", value: pp.product_type },
+                          ] : []),
+                        ].filter(r => r.value && r.value !== "0 selected").map(row => (
+                          <div key={row.label} className="flex justify-between items-center p-3 rounded-lg bg-zinc-800 border border-zinc-700">
+                            <span className="text-zinc-400 text-sm">{row.label}</span>
+                            <span className="font-semibold text-white text-sm">{row.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-sm text-zinc-500 pt-2">
+                        Everything look right? Click{" "}
+                        <strong className="text-zinc-300">
+                          {token ? "Submit Profile" : "Save & Choose Tier"}
+                        </strong>{" "}
+                        to continue.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ── Step 6 — Tier Selection ── */}
+                  {step === 6 && (
+                    <>
+                      {activeTier && (
+                        <CoachTierPayment
+                          tier={activeTier}
+                          onClose={() => setActiveTier(null)}
+                          onSuccess={() => {
+                            if (userId) sessionStorage.removeItem(storageKey(userId));
+                            setState("success");
+                          }}
+                        />
+                      )}
+                      <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-3"} gap-4`}>
+                        {TIER_OPTIONS.map(tier => (
+                          <div key={tier.key}
+                            className={`relative rounded-2xl border p-5 transition-all ${
+                              tier.comingSoon
+                                ? "border-zinc-700/60 bg-zinc-900/40 cursor-not-allowed"
+                                : activeTier === tier.key
+                                ? "border-primary bg-primary/10 shadow-lg shadow-primary/10 cursor-pointer"
+                                : "border-zinc-700 bg-zinc-800/50 hover:border-primary/50 hover:bg-zinc-800 cursor-pointer"
+                            }`}
+                            onClick={() => !tier.comingSoon && setActiveTier(tier.key)}
+                          >
+                            {tier.badge && (
+                              <span className={`absolute -top-2.5 left-1/2 -translate-x-1/2 text-xs font-bold px-3 py-0.5 rounded-full whitespace-nowrap ${
+                                tier.comingSoon
+                                  ? "bg-zinc-700 text-zinc-400"
+                                  : "bg-primary text-primary-foreground"
+                              }`}>
+                                {tier.badge}
+                              </span>
+                            )}
+                            <p className={`font-bold text-lg mt-1 ${tier.comingSoon ? "text-zinc-400" : "text-white"}`}>{tier.name}</p>
+                            <p className={`font-semibold text-base mt-0.5 ${tier.comingSoon ? "text-zinc-500" : "text-primary"}`}>{tier.price}</p>
+                            <p className={`text-sm mt-2 leading-relaxed ${tier.comingSoon ? "text-zinc-600" : "text-zinc-400"}`}>{tier.desc}</p>
+                            <div className={`mt-4 w-full py-2 rounded-lg text-center text-sm font-semibold transition-colors ${
+                              tier.comingSoon
+                                ? "bg-zinc-800/60 text-zinc-600 border border-zinc-700/50"
+                                : activeTier === tier.key
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-zinc-700 text-zinc-300"
+                            }`}>
+                              {tier.comingSoon ? "Coming Soon" : activeTier === tier.key ? "Selected" : "Select"}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-sm text-zinc-500 text-center pt-2">
+                        Your card is saved securely — you won't be charged until Galoras approves your application.
+                      </p>
+                    </>
+                  )}
+
+                  {/* ── Navigation ── */}
+                  <div className="flex gap-3 pt-4 border-t border-zinc-800">
+                    {step > 1 && step < 6 && (
+                      <Button type="button" variant="outline"
+                        onClick={() => setStep(s => s - 1)}
+                        className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white px-6">
+                        ← Back
+                      </Button>
+                    )}
+                    {step < 5 ? (
+                      <Button type="button" onClick={handleNext} disabled={generating}
+                        className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-11 text-base disabled:opacity-70">
+                        {generating ? "Writing your profile…" : "Continue →"}
+                      </Button>
+                    ) : step === 5 ? (
+                      <Button type="button" onClick={handleSubmit}
+                        className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-11 text-base"
+                        disabled={state === "submitting"}>
+                        {state === "submitting"
+                          ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>
+                          : token ? "Submit Profile" : "Save & Choose Tier →"}
+                      </Button>
+                    ) : null}
+                  </div>
+
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </section>
+    </Layout>
+  );
+}
