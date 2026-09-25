@@ -143,6 +143,22 @@ export default function CoachOnboarding() {
   const [linkedinUrl, setLinkedinUrl] = useState("");
   const [bookingUrl, setBookingUrl] = useState("");
 
+  // ── The five questions ──────────────────────────────────────────────────────
+  // These replace the free-text bio box. The coach answers in their own words,
+  // uploads one document, and the platform drafts the profile from both. The
+  // bio box asked a coach to be their own copywriter, which is why every
+  // profile that came through it read the same.
+  const [qPractice, setQPractice] = useState("");
+  const [qAudience, setQAudience] = useState("");
+  const [qMisdiagnosis, setQMisdiagnosis] = useState("");
+  const [qProof, setQProof] = useState("");
+  const [qMethod, setQMethod] = useState("");
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState("");
+  const [generated, setGenerated] = useState<Record<string, any> | null>(null);
+
   // Step 2 — tag keys
   const [specialtyTags, setSpecialtyTags] = useState<string[]>([]);
   const [audienceTags, setAudienceTags] = useState<string[]>([]);
@@ -249,11 +265,67 @@ export default function CoachOnboarding() {
     }
   };
 
+  // The five questions, in the order they are asked. Order matters: the proof
+  // comes before the method, because a profile that leads with method before
+  // earning the right to it reads like every other coach on the internet.
+  const QUESTIONS = [
+    {
+      key: "practice",
+      label: "How would you describe your coaching practice today?",
+      help: "Where you are now, and what you bring to it. We'll pick up your career history from your document, so no need to repeat it here.",
+      placeholder: "I'm currently...",
+      rows: 4, value: qPractice, set: setQPractice,
+    },
+    {
+      key: "audience",
+      label: "Who do you most want to work with?",
+      help: "Be specific. \u201cFounders\u201d isn't specific \u2014 \u201cfirst-time founders who've just raised outside money\u201d is.",
+      placeholder: "The people I work best with are...",
+      rows: 4, value: qAudience, set: setQAudience,
+    },
+    {
+      key: "misdiagnosis",
+      label: "What do your clients get wrong about their own problem?",
+      help: "What do they think is holding them back, and what actually is? This is the question that makes your profile an argument rather than a biography.",
+      placeholder: "Most people who come to me believe...",
+      rows: 4, value: qMisdiagnosis, set: setQMisdiagnosis,
+    },
+    {
+      key: "proof",
+      label: "What have you done that nobody can argue with?",
+      help: "The proof line. Numbers, names, scale. Be specific rather than modest \u2014 this is the line that makes someone trust the rest of the page.",
+      placeholder: "I've...",
+      rows: 3, value: qProof, set: setQProof,
+    },
+    {
+      key: "method",
+      label: "How do you work, and what do you call it?",
+      help: "Named frameworks if you have them. If you don't have a name for it, describe how you actually run a session and what you refuse to do.",
+      placeholder: "The way I work is...",
+      rows: 5, value: qMethod, set: setQMethod,
+    },
+  ];
+
   // ── Validation per step ──────────────────────────────────────────────────────
   const validateStep = (): boolean => {
     if (step === 1) {
       if (!fullName.trim()) {
         toast({ title: "Full name is required", variant: "destructive" }); return false;
+      }
+      const unanswered = QUESTIONS.find(q => q.value.trim().length < 40);
+      if (unanswered) {
+        toast({
+          title: "One more answer needed",
+          description: unanswered.label,
+          variant: "destructive",
+        });
+        return false;
+      }
+      if (!docFile) {
+        toast({ title: "Upload one PDF \u2014 a resume, biography, or your LinkedIn profile", variant: "destructive" }); return false;
+      }
+      if (!photoFile) {
+        toast({ title: "Add a photo", variant: "destructive" }); return false;
       }
     }
     if (step === 2) {
@@ -317,8 +389,84 @@ export default function CoachOnboarding() {
     } catch { /* private mode or quota — proceed without a draft */ }
   };
 
-  const handleNext = () => {
+  // Read a File as base64 without the data: prefix, which is what the Anthropic
+  // document block wants.
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = String(reader.result || "");
+        resolve(result.slice(result.indexOf(",") + 1));
+      };
+      reader.onerror = () => reject(new Error("Could not read that file"));
+      reader.readAsDataURL(file);
+    });
+
+  // Upload the photo to the coach-photos bucket and hand back a public URL.
+  const uploadPhoto = async (file: File, who: string): Promise<string | null> => {
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const path = `${who}/avatar-${Date.now()}.${ext}`;
+    const { error } = await supabase.storage
+      .from("coach-photos").upload(path, file, { upsert: true });
+    if (error) {
+      console.error("photo upload failed:", error);
+      return null;
+    }
+    const { data } = supabase.storage.from("coach-photos").getPublicUrl(path);
+    return data?.publicUrl ?? null;
+  };
+
+  const handleNext = async () => {
     if (!validateStep()) return;
+
+    // Leaving step 1 is where the profile gets drafted. Everything after this
+    // is the coach confirming and correcting what came back.
+    if (step === 1 && !generated) {
+      setGenerating(true);
+      setGenError("");
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const who = sessionData?.session?.user?.id || userId || "anon";
+
+        const documentBase64 = await fileToBase64(docFile!);
+        const avatarUrl = photoFile ? await uploadPhoto(photoFile, who) : null;
+
+        const { data, error } = await supabase.functions.invoke("generate-coach-profile", {
+          body: {
+            userId: sessionData?.session?.user?.id ?? userId ?? null,
+            email: sessionData?.session?.user?.email ?? null,
+            fullName: fullName.trim(),
+            avatarUrl,
+            documentBase64,
+            documentMediaType: docFile!.type || "application/pdf",
+            answers: {
+              practice: qPractice.trim(),
+              audience: qAudience.trim(),
+              misdiagnosis: qMisdiagnosis.trim(),
+              proof: qProof.trim(),
+              method: qMethod.trim(),
+            },
+          },
+        });
+
+        // supabase.functions.invoke RESOLVES on a non-2xx rather than throwing,
+        // so the error has to be read off the result. Missing this is what let
+        // analyze-coach-application fail silently for months.
+        if (error) throw new Error(error.message || "Generation failed");
+        if (!data?.ok) throw new Error(data?.error || "Generation returned nothing");
+
+        setGenerated(data.generated);
+        if (data.generated?.bio) setBio(data.generated.bio);
+      } catch (e: any) {
+        setGenError(
+          `We couldn't draft your profile: ${e?.message || e}. Your answers are saved \u2014 try Continue again, and if it keeps failing, contact us and we'll write it by hand.`
+        );
+        setGenerating(false);
+        return;
+      }
+      setGenerating(false);
+    }
+
     const next = step + 1;
     persistProgress(next);
     setStep(next);
@@ -614,28 +762,71 @@ export default function CoachOnboarding() {
                             className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-11 text-base focus-visible:ring-primary" />
                         </div>
                       </div>
+                      <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+                        <p className="text-sm text-zinc-300">
+                          Five questions and one document. We write the first draft of your
+                          profile from your answers — you edit it before anything is published.
+                        </p>
+                      </div>
+
+                      {QUESTIONS.map(q => (
+                        <div key={q.key} className="space-y-2">
+                          <Label className="text-zinc-300 text-sm font-medium">{q.label} *</Label>
+                          <p className="text-xs text-zinc-500 leading-relaxed">{q.help}</p>
+                          <Textarea
+                            id={q.key}
+                            rows={q.rows}
+                            value={q.value}
+                            onChange={e => q.set(e.target.value)}
+                            placeholder={q.placeholder}
+                            className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 text-base focus-visible:ring-primary resize-none"
+                          />
+                        </div>
+                      ))}
+
                       <div className="space-y-2">
-                        <Label className="text-zinc-300 text-sm font-medium">Bio / Positioning Statement</Label>
-                        <Textarea id="bio" rows={5} value={bio} onChange={e => setBio(e.target.value)}
-                          placeholder="Describe your coaching approach, background, and what makes you unique..."
-                          className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 text-base focus-visible:ring-primary resize-none" />
+                        <Label className="text-zinc-300 text-sm font-medium">Your document *</Label>
+                        <p className="text-xs text-zinc-500 leading-relaxed">
+                          One PDF — your resume, a biography, or your LinkedIn profile saved
+                          as PDF (on LinkedIn: More → Save to PDF). We read it for your career
+                          history so you don't have to retype it above.
+                        </p>
+                        <Input
+                          id="docFile"
+                          type="file"
+                          accept="application/pdf"
+                          onChange={e => setDocFile(e.target.files?.[0] ?? null)}
+                          className="bg-zinc-800 border-zinc-700 text-white h-11 text-base file:text-zinc-300 file:bg-zinc-700 file:border-0 file:rounded file:px-3 file:py-1 file:mr-3"
+                        />
+                        {docFile && (
+                          <p className="text-xs text-emerald-400">
+                            {docFile.name} — {(docFile.size / 1024 / 1024).toFixed(1)} MB
+                          </p>
+                        )}
                       </div>
-                      <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-5`}>
-                        <div className="space-y-2">
-                          <Label className="text-zinc-300 text-sm font-medium">LinkedIn URL</Label>
-                          <Input id="linkedinUrl" type="url" value={linkedinUrl} onChange={e => setLinkedinUrl(e.target.value)}
-                            placeholder="https://linkedin.com/in/yourprofile"
-                            className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-11 text-base focus-visible:ring-primary" />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-zinc-300 text-sm font-medium">
-                            Booking URL <span className="text-zinc-600 font-normal">(optional)</span>
-                          </Label>
-                          <Input id="bookingUrl" type="url" value={bookingUrl} onChange={e => setBookingUrl(e.target.value)}
-                            placeholder="https://calendly.com/yourname"
-                            className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-500 h-11 text-base focus-visible:ring-primary" />
-                        </div>
+
+                      <div className="space-y-2">
+                        <Label className="text-zinc-300 text-sm font-medium">Your photo *</Label>
+                        <p className="text-xs text-zinc-500 leading-relaxed">
+                          A head-and-shoulders photo. This is the first thing anyone sees.
+                        </p>
+                        <Input
+                          id="photoFile"
+                          type="file"
+                          accept="image/*"
+                          onChange={e => setPhotoFile(e.target.files?.[0] ?? null)}
+                          className="bg-zinc-800 border-zinc-700 text-white h-11 text-base file:text-zinc-300 file:bg-zinc-700 file:border-0 file:rounded file:px-3 file:py-1 file:mr-3"
+                        />
+                        {photoFile && (
+                          <p className="text-xs text-emerald-400">{photoFile.name}</p>
+                        )}
                       </div>
+
+                      {genError && (
+                        <div className="rounded-lg border border-red-900 bg-red-950/40 p-4">
+                          <p className="text-sm text-red-300">{genError}</p>
+                        </div>
+                      )}
                     </>
                   )}
 
@@ -785,6 +976,54 @@ export default function CoachOnboarding() {
                   {/* ── Step 5 — Review ── */}
                   {step === 5 && (
                     <div className="space-y-4">
+
+                      {/* The drafted profile. Shown first because it is what a
+                          visitor will actually read, and because a coach who
+                          scrolls past it has not reviewed anything. */}
+                      {generated && (
+                        <div className="space-y-4 rounded-lg border border-zinc-700 bg-zinc-900/60 p-4">
+                          <div>
+                            <p className="text-sm font-semibold text-white">Your profile, drafted from your answers</p>
+                            <p className="text-xs text-zinc-500 mt-1">
+                              Edit anything that doesn't sound like you. Nothing is published
+                              until it's approved.
+                            </p>
+                          </div>
+
+                          {Array.isArray(generated.needs_more) && generated.needs_more.length > 0 && (
+                            <div className="rounded border border-amber-900 bg-amber-950/30 p-3">
+                              <p className="text-xs text-amber-300">
+                                We didn't have enough to write: {generated.needs_more.join(", ")}.
+                                You can fill these in later — it won't hold up your application.
+                              </p>
+                            </div>
+                          )}
+
+                          {[
+                            { k: "headline", label: "Headline", rows: 2 },
+                            { k: "positioning_statement", label: "Positioning statement", rows: 4 },
+                            { k: "methodology", label: "How you work", rows: 8 },
+                            { k: "coaching_philosophy", label: "Your philosophy", rows: 3 },
+                            { k: "coaching_style", label: "Your style", rows: 2 },
+                            { k: "bio", label: "Bio", rows: 6 },
+                          ].map(f => (
+                            <div key={f.k} className="space-y-1">
+                              <Label className="text-zinc-300 text-sm font-medium">{f.label}</Label>
+                              <Textarea
+                                rows={f.rows}
+                                value={generated[f.k] ?? ""}
+                                onChange={e => {
+                                  const next = { ...generated, [f.k]: e.target.value };
+                                  setGenerated(next);
+                                  if (f.k === "bio") setBio(e.target.value);
+                                }}
+                                className="bg-zinc-800 border-zinc-700 text-white text-base focus-visible:ring-primary resize-none"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
                       <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-4`}>
                         {[
                           { label: "Name", value: fullName },
@@ -879,9 +1118,9 @@ export default function CoachOnboarding() {
                       </Button>
                     )}
                     {step < 5 ? (
-                      <Button type="button" onClick={handleNext}
-                        className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-11 text-base">
-                        Continue →
+                      <Button type="button" onClick={handleNext} disabled={generating}
+                        className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-11 text-base disabled:opacity-70">
+                        {generating ? "Writing your profile…" : "Continue →"}
                       </Button>
                     ) : step === 5 ? (
                       <Button type="button" onClick={handleSubmit}
