@@ -235,7 +235,8 @@ export default function CoachDashboard() {
   const pendingBookings = bookings?.filter(b => b.status === 'pending') || [];
   const confirmedBookings = bookings?.filter(b => b.status === 'confirmed') || [];
 
-  const fitScore = coachProfile.readiness_score ?? 89;
+  // Was `?? 89` - every unscored coach saw a confident 89/100 in the top bar.
+  const fitScore = coachProfile.readiness_score ?? null;
 
   // --- Render ---
 
