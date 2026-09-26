@@ -29,14 +29,17 @@ interface OverviewTabProps {
   stripeBookingsCount?: number;
 }
 
-/* ---------- static data ---------- */
-
-const activityItems = [
-  { icon: Eye, text: 'Your profile was viewed by a CEO (Tech sector)', time: 'just now' },
-  { icon: MessageSquare, text: 'You received a new inquiry: "Interested in a one-on-one coaching session."', time: '2 hours ago' },
-  { icon: Tag, text: 'Admin updated your ecosystem tags.', time: '1 day ago' },
-  { icon: Zap, text: 'New match signal: 2 Founders \u2013 Series A.', time: '1 day ago' },
-];
+/* ---------- activity ----------
+ *
+ * This was four hardcoded items - a CEO viewing the profile "just now", an
+ * inquiry, a tag update, a match signal - shown identically to every coach,
+ * including one who signed up a minute ago and has never been viewed by
+ * anybody. Placeholder data is fine in a mockup. Behind a login it is a lie
+ * told to someone whose trust the platform is asking for.
+ *
+ * There is no activity source yet. Until there is, the feed is honestly empty.
+ */
+const activityItems: { icon: React.ElementType; text: string; time: string }[] = [];
 
 /* ---------- sub-components ---------- */
 
@@ -48,7 +51,7 @@ function StatCard({
   icon: Icon,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   delta?: number;
   deltaLabel?: string;
   icon: React.ElementType;
@@ -111,11 +114,16 @@ function FitScoreBadge({ score }: { score: number }) {
 /* ---------- main component ---------- */
 
 export function OverviewTab({ coachProfile, pendingCount, confirmedCount, stripeBookingsCount = 0 }: OverviewTabProps) {
-  const fitScore = coachProfile.readiness_score ?? 89;
-  const pillar = coachProfile.primary_pillar ?? 'Leadership';
-  const tier = coachProfile.tier ?? 'Pro';
-  const style = coachProfile.coaching_style ?? 'Strategic';
-  const engagementModel = coachProfile.engagement_model ?? 'Hybrid';
+  // Every one of these used to fall back to an invented value - a readiness
+  // score of 89, a pillar of 'Leadership', a tier of 'Pro'. A coach with none
+  // of them set saw a complete, confident profile that described nobody.
+  // Null now means null, and the panel says so.
+  const fitScore = coachProfile.readiness_score ?? null;
+  const pillar = coachProfile.primary_pillar ?? null;
+  const tier = coachProfile.tier ?? null;
+  const style = coachProfile.coaching_style ?? null;
+  const engagementModel = coachProfile.engagement_model ?? null;
+  const notSet = <span className="text-sm text-muted-foreground/60">Not set yet</span>;
 
   return (
     <div className="flex gap-6">
@@ -125,32 +133,33 @@ export function OverviewTab({ coachProfile, pendingCount, confirmedCount, stripe
         <div>
           <h2 className="text-lg font-display font-bold text-white mb-4">Performance Snapshot</h2>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Profile views are not tracked anywhere yet. The old value was a
+                literal 142, shown to every coach. A dash is honest; a number
+                we cannot source is not. */}
             <StatCard
               label="Profile Views"
-              value={142}
-              delta={12}
-              deltaLabel="vs. last 30d"
+              value="\u2014"
+              deltaLabel="not tracked yet"
               icon={Eye}
             />
+            {/* No deltas on any card. There is no historical series to compare
+                against, and the old code invented one - a coach with zero
+                inquiries was shown "-5% vs last 30d" in red, a decline
+                manufactured from nothing. */}
             <StatCard
               label="Inquiries"
               value={pendingCount}
-              delta={pendingCount > 0 ? 8 : -5}
-              deltaLabel="vs. last 30d"
               icon={Users}
             />
             <StatCard
               label="Intro Sessions"
               value={confirmedCount}
-              delta={confirmedCount > 0 ? 15 : 0}
-              deltaLabel="vs. last 30d"
               icon={Calendar}
             />
             <StatCard
               label="Paid Bookings"
               value={stripeBookingsCount}
-              delta={stripeBookingsCount > 0 ? stripeBookingsCount : 0}
-              deltaLabel="total received"
+              deltaLabel="total"
               icon={Bookmark}
             />
           </div>
@@ -166,6 +175,14 @@ export function OverviewTab({ coachProfile, pendingCount, confirmedCount, stripe
           </div>
           <Card className="bg-card border-border">
             <CardContent className="p-0 divide-y divide-border">
+              {activityItems.length === 0 && (
+                <div className="px-5 py-8 text-center">
+                  <p className="text-sm text-muted-foreground">
+                    Nothing yet. Views, enquiries and bookings will appear here once
+                    your profile is live.
+                  </p>
+                </div>
+              )}
               {activityItems.map((item, idx) => {
                 const Icon = item.icon;
                 return (
@@ -193,33 +210,37 @@ export function OverviewTab({ coachProfile, pendingCount, confirmedCount, stripe
             {/* Primary Pillar */}
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Primary Pillar</p>
-              <p className="text-sm font-semibold text-white">{pillar}</p>
+              {pillar ? <p className="text-sm font-semibold text-white">{pillar}</p> : notSet}
             </div>
 
             {/* Enterprise Fit Score */}
             <div className="flex flex-col items-center py-2">
               <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3">Enterprise Fit</p>
-              <FitScoreBadge score={fitScore} />
+              {fitScore === null
+                ? <p className="text-sm text-muted-foreground/60 py-6">Not scored yet</p>
+                : <FitScoreBadge score={fitScore} />}
             </div>
 
             {/* Coaching Style */}
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Coaching Style</p>
-              <p className="text-sm font-semibold text-white">{style}</p>
+              {style ? <p className="text-sm font-semibold text-white">{style}</p> : notSet}
             </div>
 
             {/* Engagement Model */}
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Engagement Model</p>
-              <p className="text-sm font-semibold text-white">{engagementModel}</p>
+              {engagementModel ? <p className="text-sm font-semibold text-white">{engagementModel}</p> : notSet}
             </div>
 
             {/* Tier */}
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Tier</p>
-              <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-accent/15 text-accent text-xs font-display font-semibold border border-accent/20 capitalize">
-                {tier}
-              </span>
+              {tier ? (
+                <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-accent/15 text-accent text-xs font-display font-semibold border border-accent/20 capitalize">
+                  {tier}
+                </span>
+              ) : notSet}
             </div>
           </CardContent>
         </Card>

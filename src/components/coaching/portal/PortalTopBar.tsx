@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 interface PortalTopBarProps {
   displayName: string;
   tier: string | null;
-  fitScore: number;
+  fitScore: number | null;
   avatarUrl: string | null;
   /** Public profile slug. Absent until the coach is approved and published. */
   slug?: string | null;
@@ -56,7 +56,7 @@ export function PortalTopBar({ displayName, tier, fitScore, avatarUrl, slug }: P
 
         {/* Fit score */}
         <div className="flex items-center gap-1.5">
-          <span className="text-accent font-display font-bold text-lg">{fitScore}</span>
+          <span className="text-accent font-display font-bold text-lg">{fitScore ?? "\u2014"}</span>
           <span className="text-muted-foreground text-xs">/100</span>
         </div>
 
