@@ -8,6 +8,11 @@ import { Link } from "react-router-dom";
 // meet rough edges, and the honest thing is to say so before they find one
 // rather than after.
 //
+// Updated 29 September 2026. The previous wording said "Galoras opens to the
+// public in January 2027" and stopped there, which read as though nothing
+// existed yet. Real coaches are now live and that is the more interesting fact,
+// so the notice says both: open now to invited coaches, public in January.
+//
 // Deliberately not dismissible. Somebody who closes it and then hits a bug is
 // exactly the person it was written for.
 //
@@ -23,7 +28,9 @@ export function PreLaunchNotice() {
           <span className="font-semibold text-primary uppercase tracking-wider text-xs mr-2">
             Pre-launch
           </span>
-          Galoras opens to the public in{" "}
+          Galoras is open to{" "}
+          <span className="text-foreground font-medium">invited coaches</span> now
+          and to everyone in{" "}
           <span className="text-foreground font-medium">January 2027</span>. What
           you&rsquo;re seeing is real and still being built, so some of it will be
           rough. You&rsquo;re very welcome to look around &mdash;{" "}

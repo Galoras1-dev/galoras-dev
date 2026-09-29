@@ -2,40 +2,98 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
 
-// Hand-picked for the homepage. This list is deliberately static — it is a
-// showcase, not the directory. Anyone removed from Galoras must be removed
-// here and in src/pages/About.tsx, which keeps its own copy.
-const COACHES = [
-  {
-    name: "Mitesh Kapadia",
-    title: "Master Coach",
-    slug: "mitesh-kapadia",
-    photo:
-      "https://qbjuomsmnrclsjhdsjcz.supabase.co/storage/v1/object/public/coach-images/Outside_Blue_Mitesh-removebg-preview.png",
-  },
-];
+// ─────────────────────────────────────────────────────────────────────────────
+// The showcase now reads PUBLISHED coaches, rather than a list typed in here.
+//
+// It used to be a hardcoded array of one — Mitesh — linking to
+// /coach/mitesh-kapadia. If that coach is not published, or has no slug, the
+// homepage's most prominent link is a 404, and nothing in the code would ever
+// say so. A hand-maintained list of people also has to be updated in two places
+// (here and About.tsx) every time someone joins or leaves, and it will not be.
+//
+// Reading from the database means the section fills itself as founding coaches
+// go live, and shows NOTHING while there are none. An empty showcase is honest;
+// a showcase of one person who may not exist is not.
+//
+// Only published coaches with a slug are eligible: a slug is what makes the
+// link work, and lifecycle_status is what says the coach agreed to be seen.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type ShowcaseCoach = {
+  name: string;
+  title: string;
+  slug: string;
+  photo: string;
+};
 
 export function FeaturedCoaches() {
   const navigate = useNavigate();
+  const [coaches, setCoaches] = useState<ShowcaseCoach[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [active, setActive] = useState(0);
   const [fading, setFading] = useState(false);
   const [colorizing, setColorizing] = useState(false);
 
   useEffect(() => {
-    // Nothing to rotate between while there is a single featured coach.
-    if (colorizing || COACHES.length < 2) return;
+    (async () => {
+      const { data, error } = await supabase
+        .from("coaches")
+        .select("display_name, headline, slug, cutout_url, avatar_url, profile_image_url, is_featured, featured_rank, published_at")
+        .eq("lifecycle_status", "published")
+        .not("slug", "is", null)
+        .order("is_featured", { ascending: false })
+        .order("featured_rank", { ascending: true, nullsFirst: false })
+        .order("published_at", { ascending: true })
+        .limit(8);
+
+      if (error) {
+        // Nothing renders rather than a broken showcase. The homepage is the
+        // last place to surface a database error at a stranger.
+        console.error("FeaturedCoaches: could not load published coaches", error);
+        setLoaded(true);
+        return;
+      }
+
+      const usable = (data ?? [])
+        .map(c => {
+          // cutout_url is the transparent-background portrait this layout was
+          // designed around; the others are ordinary photos and still work.
+          const photo = c.cutout_url || c.avatar_url || c.profile_image_url || null;
+          if (!photo || !c.slug || !c.display_name) return null;
+          return {
+            name: c.display_name as string,
+            // The headline is pipe-separated: "Role | proof | Galoras". Only the
+            // first segment belongs on a name plate.
+            title: (c.headline ? String(c.headline).split("|")[0] : "Galoras Coach").trim(),
+            slug: c.slug as string,
+            photo,
+          } as ShowcaseCoach;
+        })
+        .filter(Boolean) as ShowcaseCoach[];
+
+      setCoaches(usable);
+      setLoaded(true);
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (colorizing || coaches.length < 2) return;
     const interval = setInterval(() => {
       setFading(true);
       setTimeout(() => {
-        setActive(i => (i + 1) % COACHES.length);
+        setActive(i => (i + 1) % coaches.length);
         setFading(false);
       }, 500);
     }, 5000);
     return () => clearInterval(interval);
-  }, [colorizing]);
+  }, [colorizing, coaches.length]);
 
-  const coach = COACHES[active];
+  // Render nothing at all until there is a real coach to show.
+  if (!loaded || coaches.length === 0) return null;
+
+  const coach = coaches[active % coaches.length];
 
   const handlePhotoClick = () => {
     setColorizing(true);
@@ -143,7 +201,7 @@ export function FeaturedCoaches() {
 
             {/* Dot indicators — only meaningful with more than one coach */}
             <div className="flex gap-2">
-              {COACHES.length > 1 && COACHES.map((c, i) => (
+              {coaches.length > 1 && coaches.map((c, i) => (
                 <button
                   key={i}
                   onClick={() => {
