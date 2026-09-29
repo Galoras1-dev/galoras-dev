@@ -1,141 +1,119 @@
-import { Link, useNavigate } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
+import { Link } from "react-router-dom";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
-import { OptimizedImage } from "@/components/ui/optimized-image";
 import { FounderVideoModal } from "@/components/FounderVideoModal";
 import { FeaturedCoaches } from "@/components/FeaturedCoaches";
-import { HowItWorks } from "@/components/HowItWorks";
 import { SEO } from "@/components/SEO";
 import { PreLaunchNotice } from "@/components/PreLaunchNotice";
-import { ArrowRight, Compass, Zap, Target, Brain, MessageCircle, TrendingUp } from "lucide-react";
+import { EarlyAccess } from "@/components/EarlyAccess";
+import { ArrowRight } from "lucide-react";
 
-const categories = [
-  { icon: Target, name: "Leadership Under Pressure", slug: "leadership", desc: "Leading teams, making decisions, and holding authority when the stakes are real." },
-  { icon: TrendingUp, name: "Career Acceleration", slug: "career", desc: "Moving faster, further, and with more intention — at every stage of the climb." },
-  { icon: Zap, name: "Execution & Performance", slug: "performance", desc: "Closing the gap between what you intend and what you actually deliver." },
-  { icon: Brain, name: "Mindset & Resilience", slug: "mindset", desc: "The mental edge that separates consistent performers from everyone else." },
-  { icon: MessageCircle, name: "Influence & Communication", slug: "communication", desc: "How you show up, speak, and move people — in rooms that matter." },
-  { icon: Compass, name: "Transitions & Pivots", slug: "transitions", desc: "Role changes, industry shifts, and reinventions — done with clarity and confidence." },
-];
+// ─────────────────────────────────────────────────────────────────────────────
+// The homepage — built to the Galoras message house (Strategy V2, slide 14).
+//
+//   BRAND    Do More. Do It Now.
+//   CORE     AI that enables human connection
+//   COACH    Get work. Do the work. Run the work.
+//   COACHEE  Find the human. Do the work together. Keep moving between sessions.
+//
+// TWO THINGS THAT WERE TRIED AND REMOVED, SO NOBODY PUTS THEM BACK
+//
+// 1. A section leading with the UAT finding that adherence between sessions was
+//    near zero. It is the most valuable thing the business knows and it must not
+//    go on a public page: Mitesh is the only coach publicly associated with
+//    Galoras, so an anonymised "our pilot" points straight at him, using a real
+//    client's behaviour from a relationship she believed was private.
+//
+// 2. A four-card product story where each card carried a Live now / Partly live
+//    / In build badge. That is a roadmap audit, not a homepage. It was written
+//    by someone thinking like an engineer rather than a marketer, and it made
+//    Galoras look unfinished on its own front page.
+//
+// HOW HONESTY IS HANDLED INSTEAD
+//
+// The page describes the product Galoras is launching in January, because that
+// is what it is selling and what the pre-launch frame is for. It does not claim
+// any of it works today. The mechanism is described in the tense of something
+// being built, the PreLaunchNotice carries the date at the top of every page,
+// and no screenshot, testimonial, metric or coach count is invented anywhere.
+// ─────────────────────────────────────────────────────────────────────────────
 
-const HEADLINES: { parts: { text: string; highlight?: boolean }[]; href: string | null }[] = [
+const COACH_STEPS = [
   {
-    parts: [
-      { text: "Business is a " },
-      { text: "team sport.", highlight: true },
-      { text: " Most teams never practice." },
-    ],
-    href: null,
+    label: "Get work",
+    body: "A profile that reads like your practice, in front of people actively looking. Matched on what you actually do, not on a keyword.",
   },
   {
-    parts: [
-      { text: "Clarity changes everything. " },
-      { text: "Coaching", highlight: true },
-      { text: " creates it." },
-    ],
-    href: "/coaching",
+    label: "Do the work",
+    body: "Meet your client on Galoras. The session becomes a record — priorities, commitments, what was decided — instead of notes you write up at eleven at night.",
   },
   {
-    parts: [
-      { text: "Effort isn't the constraint. " },
-      { text: "Guidance", highlight: true },
-      { text: " is." },
-    ],
-    href: "/coaching",
-  },
-  {
-    parts: [
-      { text: "A coach gives you the space to " },
-      { text: "reflect, commit, and grow.", highlight: true },
-    ],
-    href: "/coaching",
-  },
-  {
-    parts: [
-      { text: "The gap between you and your potential has a " },
-      { text: "name.", highlight: true },
-    ],
-    href: "/coaching",
+    label: "Run the work",
+    body: "Scheduling, clients, payments and the history of every relationship in one place, rather than spread across four tools and your inbox.",
   },
 ];
 
-// Timing constants (ms)
-const SWEEP_DURATION = 750;
-const HOLD_DURATION = 3200;
-const EXIT_DURATION = 350;
+const COACHEE_STEPS = [
+  {
+    label: "Find the human",
+    body: "A real coach, chosen for what you're actually trying to do. Not an algorithm having a go at coaching you.",
+  },
+  {
+    label: "Do the work together",
+    body: "Meet in one place, with everything from your last session already there — so you don't spend the first ten minutes recapping.",
+  },
+  {
+    label: "Keep moving between sessions",
+    body: "What you agreed becomes something you can see and act on. And your coach arrives at the next session knowing how it actually went.",
+  },
+];
 
-type Phase = "sweep" | "visible" | "exiting";
+function scrollToForm() {
+  document.getElementById("early-access")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
-function RotatingHero() {
-  const navigate = useNavigate();
-  const [index, setIndex] = useState(0);
-  const [phase, setPhase] = useState<Phase>("sweep");
-  const [paused, setPaused] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const clear = () => { if (timerRef.current) clearTimeout(timerRef.current); };
-
-  const runCycle = (idx: number) => {
-    setIndex(idx);
-    setPhase("sweep");
-
-    timerRef.current = setTimeout(() => {
-      setPhase("visible");
-
-      timerRef.current = setTimeout(() => {
-        setPhase("exiting");
-
-        timerRef.current = setTimeout(() => {
-          runCycle((idx + 1) % HEADLINES.length);
-        }, EXIT_DURATION);
-      }, HOLD_DURATION);
-    }, SWEEP_DURATION);
-  };
-
-  useEffect(() => {
-    if (!paused) {
-      runCycle(0);
-    }
-    return clear;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paused]);
-
-  const headline = HEADLINES[index];
-
-  const handleClick = () => {
-    if (headline.href) {
-      clear();
-      navigate(headline.href);
-    }
-  };
-
+function Track({
+  eyebrow,
+  title,
+  steps,
+  cta,
+}: {
+  eyebrow: string;
+  title: string;
+  steps: { label: string; body: string }[];
+  cta: string;
+}) {
   return (
-    <div
-      className="relative overflow-hidden cursor-default"
-      onMouseEnter={() => { clear(); setPaused(true); }}
-      onMouseLeave={() => { setPaused(false); }}
-      style={{ minHeight: "3.5rem" }}
-    >
-      {/* Headline text */}
-      <span
-        onClick={handleClick}
-        className={[
-          "relative z-20 block text-4xl md:text-5xl lg:text-6xl font-display font-bold leading-tight",
-          headline.href ? "cursor-pointer" : "",
-          phase === "sweep" || phase === "visible" ? "headline-reveal" : "",
-          phase === "exiting" ? "headline-exit" : "",
-        ].join(" ")}
+    <div className="rounded-3xl border border-border bg-card p-8 lg:p-10">
+      <p className="mb-3 text-xs font-bold uppercase tracking-widest text-primary">
+        {eyebrow}
+      </p>
+      <h3 className="mb-9 font-display text-2xl font-bold leading-tight text-foreground lg:text-3xl">
+        {title}
+      </h3>
+
+      <ol className="mb-9 space-y-7">
+        {steps.map((s, i) => (
+          <li key={s.label} className="flex gap-5">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-primary/10 font-display text-sm font-bold text-primary">
+              {i + 1}
+            </span>
+            <div>
+              <p className="font-display text-base font-bold text-foreground">{s.label}</p>
+              <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{s.body}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      <Button
+        size="lg"
+        onClick={scrollToForm}
+        className="h-12 w-full bg-primary text-base font-semibold text-primary-foreground hover:bg-primary/90"
       >
-        {headline.parts.map((part, i) =>
-          part.highlight
-            ? <span key={i} className="text-gradient">{part.text}</span>
-            : <span key={i} className="text-foreground">{part.text}</span>
-        )}
-        {headline.href && (
-          <ArrowRight className="inline-block ml-3 h-8 w-8 text-accent opacity-70" />
-        )}
-      </span>
+        {cta}
+        <ArrowRight className="ml-2 h-4 w-4" />
+      </Button>
     </div>
   );
 }
@@ -144,106 +122,136 @@ export default function Index() {
   return (
     <Layout>
       <SEO
-        title="Elite Performance Coaching"
-        description="Galoras connects high-performers and leadership teams with coaches who have operated at the level they coach. Execution-led. Results-driven."
+        title="AI that enables human connection"
+        description="Galoras is a coaching platform built around the relationship between a coach and the person they coach. Find the human, do the work together, keep moving between sessions. Opening January 2027."
         canonical="/"
       />
       <FounderVideoModal />
       <PreLaunchNotice />
-      {/* Hero Section */}
-      <section className="relative min-h-[90vh] flex items-center overflow-hidden">
-        {/* Background Image */}
-        <div className="absolute inset-0">
-          <OptimizedImage
-            src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1920&q=80"
-            alt="Professional team collaboration"
-            className="w-full h-full"
-            overlay
-          />
-          <div className="absolute inset-0 bg-background/70" />
-        </div>
 
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,hsl(var(--primary)/0.15),transparent_50%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,hsl(var(--accent)/0.1),transparent_50%)]" />
+      {/* ── Hero ─────────────────────────────────────────────────────────── */}
+      <section className="relative flex min-h-[80vh] items-center overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,hsl(var(--primary)/0.18),transparent_55%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,hsl(var(--accent)/0.10),transparent_55%)]" />
 
         <div className="container-wide relative z-10 py-20">
-          <div className="max-w-4xl mx-auto text-center">
-            <RotatingHero />
+          <div className="grid items-center gap-12 lg:grid-cols-[1.1fr_1fr] lg:gap-16">
 
-            <p className="text-lg md:text-xl text-muted-foreground max-w-3xl mx-auto mt-8 mb-10">
-              Coaching is not our business. Winning is.
-            </p>
+            <div>
+              <p className="mb-5 inline-flex items-center gap-2 rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-accent">
+                Opening January 2027
+              </p>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Link to="/coaching">
-                <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 glow-primary text-lg px-8 h-14">
-                  Find Your Coach
+              <h1 className="font-display text-5xl font-extrabold leading-[1.05] text-foreground sm:text-6xl lg:text-7xl">
+                Do More.<br />
+                <span className="text-gradient">Do It Now.</span>
+              </h1>
+
+              <p className="mt-7 max-w-xl font-display text-2xl font-bold leading-snug text-foreground">
+                AI that enables human connection.
+              </p>
+
+              {/* The mechanism, in Conor's own words rather than as an
+                  abstraction. This is the paragraph that separates Galoras from
+                  every "AI coaching" product in the category: the intelligence is
+                  tethered at both ends to a real coach and a real client. */}
+              <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
+                A real coach, matched to you properly. You meet on Galoras. The
+                session becomes the work — what you agreed, turned into something
+                you can act on — and your coach arrives at the next one already
+                knowing how it went.
+              </p>
+
+              <p className="mt-5 max-w-xl text-base leading-relaxed text-foreground">
+                The coaching is human. The technology is what makes it continue.
+              </p>
+
+              <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+                <Button
+                  size="lg"
+                  onClick={scrollToForm}
+                  className="h-14 bg-primary px-8 text-base font-semibold text-primary-foreground hover:bg-primary/90 glow-primary"
+                >
+                  Get early access
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
-              </Link>
-              <Link to="/apply">
-                <Button size="lg" variant="outline" className="border-primary/50 text-foreground hover:bg-primary/10 text-lg px-8 h-14">
-                  Join as a Coach
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={scrollToForm}
+                  className="h-14 border-primary/50 px-8 text-base text-foreground hover:bg-primary/10"
+                >
+                  Apply as a founding coach
                 </Button>
-              </Link>
+              </div>
+            </div>
+
+            <div id="early-access" className="scroll-mt-24">
+              <EarlyAccess />
             </div>
           </div>
         </div>
       </section>
 
-      <FeaturedCoaches />
-      <HowItWorks />
-
-      {/* Categories Preview */}
-      <section className="section-padding bg-muted/30">
+      {/* ── The two journeys ─────────────────────────────────────────────────
+          Slides 10 and 11. A visitor should recognise which of the two they are
+          within a second, and not have to read the other one. */}
+      <section className="section-padding border-y border-border bg-background">
         <div className="container-wide">
-          <div className="text-center mb-14">
-            <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">What We <span className="text-gradient">Coach</span></h2>
-            <p className="text-muted-foreground text-lg max-w-2xl mx-auto">Real performance. Built through experience, not theory.</p>
+          <div className="mx-auto mb-14 max-w-2xl text-center">
+            <h2 className="font-display text-3xl font-bold md:text-4xl">
+              Two sides of the same{" "}
+              <span className="text-gradient">relationship</span>
+            </h2>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {categories.map((category) => (
-              <Link
-                key={category.slug}
-                to={`/coaching?category=${category.slug}`}
-                className="group flex items-start gap-5 p-6 rounded-2xl bg-card border border-border hover:border-primary/50 transition-all card-hover"
-              >
-                <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:scale-110 group-hover:bg-primary/20 transition-all">
-                  <category.icon className="h-7 w-7 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <h3 className="font-display font-bold text-lg text-foreground">{category.name}</h3>
-                    <ArrowRight className="h-4 w-4 text-primary opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
-                  </div>
-                  <p className="text-sm text-muted-foreground leading-relaxed">{category.desc}</p>
-                </div>
-              </Link>
-            ))}
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Track
+              eyebrow="If you coach"
+              title="Get work. Do the work. Run the work."
+              steps={COACH_STEPS}
+              cta="Apply as a founding coach"
+            />
+            <Track
+              eyebrow="If you're looking for a coach"
+              title="Find the human. Do the work together. Keep moving."
+              steps={COACHEE_STEPS}
+              cta="Get early access"
+            />
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
+      {/* Real published coaches. Renders nothing while there are none. */}
+      <FeaturedCoaches />
+
+      {/* ── Close ────────────────────────────────────────────────────────── */}
       <section className="section-padding hero-gradient">
-        <div className="container-wide text-center">
-          <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">Stop Navigating It <span className="text-gradient">Alone</span></h2>
-          <p className="text-muted-foreground text-lg mb-8 max-w-2xl mx-auto">
-            Every high-performer has blind spots. Galoras connects you with a coach who's been in the room and help you lead with more clarity, confidence, and impact.
+        <div className="container-wide max-w-3xl text-center">
+          <h2 className="mb-5 font-display text-3xl font-bold md:text-4xl">
+            We're building this with our{" "}
+            <span className="text-gradient">founding coaches</span>
+          </h2>
+          <p className="mb-9 text-lg leading-relaxed text-muted-foreground">
+            Galoras opens to everyone in January 2027. Between now and then we're
+            building it alongside a small group of coaches who get in early, help
+            shape it, and join free at launch — subject to approval. We read every
+            application and take on a few at a time.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link to="/signup">
-              <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90">
-                Join the Galoras Community
-              </Button>
+          <Button
+            size="lg"
+            onClick={scrollToForm}
+            className="h-14 bg-primary px-8 text-base font-semibold text-primary-foreground hover:bg-primary/90"
+          >
+            Apply as a founding coach
+            <ArrowRight className="ml-2 h-5 w-5" />
+          </Button>
+          <p className="mt-6 text-sm text-muted-foreground">
+            Already spoken to us?{" "}
+            <Link to="/apply" className="text-primary underline underline-offset-4 hover:text-primary/80">
+              Go to the full application
             </Link>
-            <Link to="/contact">
-              <Button size="lg" variant="outline" className="border-primary/50 hover:bg-primary/10">
-                Book a Business Consultation
-              </Button>
-            </Link>
-          </div>
+          </p>
         </div>
       </section>
     </Layout>
