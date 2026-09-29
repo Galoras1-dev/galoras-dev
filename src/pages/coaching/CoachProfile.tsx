@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { Layout } from "@/components/layout";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -27,23 +27,40 @@ type CoachProfileData = {
   // showed either. A coach who completed all five steps got a page with their
   // name on it and nothing else they had written.
   bio: string | null;
-  linkedin_url: string | null;
   positioning_statement: string | null;
   methodology: string | null;
   coaching_style: string | null;
   engagement_format: string | null;
   primary_pillar: string | null;
   proof_points: unknown;
+  /** Generated as five SEARCH TERMS, deliberately in the buyer's words rather
+   *  than the coach's. They were being written to the database and never
+   *  selected here, so the whole SEO payload stopped one step short of the
+   *  page it was written for. */
+  specialties: string[] | null;
+  coaching_philosophy: string | null;
   audience: string[] | null;
   tier: string | null;
   lifecycle_status: string | null;
-  booking_url: string | null;
   avatar_url: string | null;
   /** Legacy second image column. The editor exposes both; this page reads
    *  avatar_url first and falls back, so a photo saved in either field shows. */
   profile_image_url: string | null;
   video_url: string | null;
 };
+
+// One list, named once.
+//
+// This used to be a string literal inline in the query, and the edge function
+// that previews a draft had its own copy. Two hand-maintained lists of the same
+// thing is how `specialties` came to be generated, stored, and never displayed.
+// get-coach-preview selects exactly these columns; if you add one here, add it
+// there in the same change.
+const PROFILE_COLUMNS =
+  "id, slug, display_name, headline, bio, positioning_statement, " +
+  "methodology, coaching_philosophy, coaching_style, engagement_format, " +
+  "primary_pillar, proof_points, specialties, audience, tier, lifecycle_status, " +
+  "avatar_url, profile_image_url, video_url";
 
 function normalizeProofPoints(value: unknown): string[] {
   if (!value) return [];
@@ -61,6 +78,17 @@ function normalizeProofPoints(value: unknown): string[] {
 
 export default function CoachProfile() {
   const { slug, id, coachId } = useParams();
+
+  // ?preview=1 renders an UNPUBLISHED profile, to the coach it belongs to or to
+  // an admin, through the same component that serves the live page.
+  //
+  // That sameness is the whole point. The coach's sign-off and the admin's
+  // publish decision are only worth anything if what they looked at is what goes
+  // out. A dedicated preview screen would drift from the real page within a month
+  // and both approvals would quietly stop meaning what they say.
+  const [searchParams] = useSearchParams();
+  const isPreview = searchParams.get("preview") === "1";
+  const [previewNote, setPreviewNote] = useState<{ published: boolean } | null>(null);
 
   const resolvedSlug = slug;
   const fallbackId = !slug ? id || coachId : null;
@@ -122,7 +150,9 @@ export default function CoachProfile() {
 
   useEffect(() => {
     fetchCoach();
-  }, [resolvedSlug, fallbackId]);
+    // isPreview belongs in here: toggling ?preview=1 changes which source the
+    // page reads from, so leaving it out would show a stale published row.
+  }, [resolvedSlug, fallbackId, isPreview]);
 
   useEffect(() => {
     if (coach?.id) fetchProducts(coach.id, coach.tier);
@@ -164,10 +194,32 @@ export default function CoachProfile() {
     setLoading(true);
     setDebugError("");
     try {
+      // ── preview path ──────────────────────────────────────────────────────
+      //
+      // Drafts are not readable from the browser and must not be. The edge
+      // function checks who is asking - the coach themselves, or an admin - and
+      // returns the same columns this page selects.
+      if (isPreview) {
+        const { data, error } = await supabase.functions.invoke("get-coach-preview", {
+          body: { slug: resolvedSlug ?? null, coachId: fallbackId ?? null },
+        });
+        // invoke resolves on a non-2xx, so the failure is on the result.
+        if (error || data?.error || !data?.coach) {
+          setDebugError(data?.error || error?.message || "Could not load the preview.");
+          setCoach(null);
+          setLoading(false);
+          return;
+        }
+        setCoach(data.coach as unknown as CoachProfileData);
+        setPreviewNote({ published: Boolean(data.published) });
+        setLoading(false);
+        return;
+      }
+
       let query = supabase
         .from("coaches")
         .select(
-          "id, slug, display_name, headline, bio, linkedin_url, positioning_statement, methodology, coaching_style, engagement_format, primary_pillar, proof_points, audience, tier, lifecycle_status, booking_url, avatar_url, profile_image_url, video_url"
+          PROFILE_COLUMNS
         )
         .eq("lifecycle_status", "published");
 
@@ -227,6 +279,25 @@ export default function CoachProfile() {
 
   return (
     <Layout>
+      {/* The preview banner is deliberately loud and deliberately sticky.
+          Someone looking at an unpublished page must never be in any doubt about
+          which one they are looking at - the whole risk of a preview that renders
+          identically to the live page is mistaking one for the other. */}
+      {isPreview && previewNote && (
+        <div className="sticky top-0 z-50 w-full border-b border-amber-500/40 bg-amber-950/95 backdrop-blur">
+          <div className="container-wide py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
+              Preview
+            </span>
+            <span className="text-sm text-amber-100/90">
+              {previewNote.published
+                ? "This profile is already live. You are seeing it exactly as visitors do."
+                : "Not published. Nobody else can see this page yet."}
+            </span>
+          </div>
+        </div>
+      )}
+
       <section className="relative pt-28 pb-16 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-background to-muted/30" />
         <div className="container-wide relative z-10">
@@ -300,17 +371,10 @@ export default function CoachProfile() {
                     </p>
                   )}
 
-                  {coach.linkedin_url && (
-                    <a
-                      href={coach.linkedin_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 mt-4 text-sm text-muted-foreground hover:text-primary transition-colors"
-                    >
-                      <Linkedin className="h-4 w-4" />
-                      LinkedIn
-                    </a>
-                  )}
+                  {/* The LinkedIn link was removed on 29 September. A coach
+                      profile on Galoras is not a signpost to somewhere the
+                      coachee can contact them off-platform. Credibility comes
+                      from the proof points and the profile itself. */}
                 </div>
 
                 {/* Two-column layout */}
@@ -419,7 +483,6 @@ export default function CoachProfile() {
                               key={product.id}
                               product={product}
                               coachName={coach.display_name || ""}
-                              bookingUrl={coach.booking_url}
                               getTypeConfig={getTypeConfig}
                               onBookNow={
                                 product.booking_mode === "stripe" && product.price_amount
@@ -534,33 +597,32 @@ export default function CoachProfile() {
                       )}
 
                       <div className="space-y-2">
-                        <AuthGate isLoggedIn={isLoggedIn} message="Sign in to book a session">
-                          {coach.booking_url ? (
-                            <a
-                              href={coach.booking_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="block"
-                            >
-                              <Button
-                                size="lg"
-                                className="w-full bg-primary text-primary-foreground hover:bg-primary/90 glow-primary"
-                                disabled={checkoutLoading}
-                              >
-                                <Calendar className="mr-2 h-4 w-4" />
-                                {checkoutLoading ? "Loading…" : "Book a Call"}
-                              </Button>
-                            </a>
-                          ) : (
-                            <Button
-                              size="lg"
-                              className="w-full bg-primary text-primary-foreground"
-                              disabled
-                            >
-                              <Calendar className="mr-2 h-4 w-4" />
-                              Book a Call
-                            </Button>
-                          )}
+                        {/* ── The session starts HERE, on Galoras ──────────
+                            This button used to be
+                              <a href={coach.booking_url} target="_blank">
+                            sending the visitor to the coach’s own Calendly. It
+                            was the largest button on the page, so the main
+                            conversion path on Galoras led off Galoras: the
+                            meeting then happened on Zoom, and the platform never
+                            saw the session, the recording, the transcript, the
+                            actions, the coach brief — or a fee.
+
+                            The entire proposition is that the meeting happens
+                            here. An external booking link is not a convenience,
+                            it is the business model leaking through its own call
+                            to action. Do not put it back.
+
+                            send-contact-message emails the coach, so this route
+                            reaches a human today. */}
+                        <AuthGate isLoggedIn={isLoggedIn} message="Sign in to request a session">
+                          <Button
+                            size="lg"
+                            className="w-full bg-primary text-primary-foreground hover:bg-primary/90 glow-primary"
+                            onClick={() => setShowContact(true)}
+                          >
+                            <Calendar className="mr-2 h-4 w-4" />
+                            Request a session
+                          </Button>
                         </AuthGate>
 
                         <AuthGate isLoggedIn={isLoggedIn} message="Sign in to message this coach">
@@ -571,11 +633,32 @@ export default function CoachProfile() {
                             onClick={() => setShowContact(true)}
                           >
                             <MessageCircle className="mr-2 h-4 w-4" />
-                            Message
+                            Ask a question first
                           </Button>
                         </AuthGate>
                       </div>
                     </div>
+
+                    {/* The five generated search terms. Written in the buyer's
+                        language on purpose, which is what makes them worth
+                        rendering rather than hiding in the record. */}
+                    {coach.specialties && coach.specialties.length > 0 && (
+                      <div className="rounded-2xl border border-border bg-card p-5">
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+                          Specialties
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {coach.specialties.map((sp, i) => (
+                            <div
+                              key={i}
+                              className="text-xs px-2 py-1 rounded-md border border-primary/30 bg-primary/5 text-foreground"
+                            >
+                              {sp}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {coach.audience && coach.audience.length > 0 && (
                       <div className="rounded-2xl border border-border bg-card p-5">

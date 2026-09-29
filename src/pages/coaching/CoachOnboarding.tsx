@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { Loader2, CheckCircle, AlertCircle, Check } from "lucide-react";
 import { useTags } from "@/hooks/useTags";
 import { useProductTypes } from "@/hooks/useProductTypes";
 import { CoachTierPayment } from "@/components/coaching/CoachTierPayment";
@@ -157,6 +157,50 @@ export default function CoachOnboarding() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState("");
+  // The coaches row the generator created. Needed to build the preview link.
+  const [coachRowId, setCoachRowId] = useState<string | null>(null);
+
+  // ── The wait ────────────────────────────────────────────────────────────────
+  //
+  // Drafting a profile takes roughly 20-40 seconds: the PDF goes up, Claude reads
+  // the whole document, then writes six sections. A disabled button for that long
+  // reads as broken, so the coach is shown the stages instead.
+  //
+  // These stages are real and they happen in this order. The first and the last
+  // are driven by actual events. The three in the middle all happen inside one
+  // API call, so they advance on elapsed time - but the final stage is NEVER
+  // marked complete until the call returns, and if it overruns the coach is told
+  // it is taking longer rather than being shown a bar stuck at the end.
+  const GEN_STAGES: { label: string; seconds: number }[] = [
+    { label: "Uploading your document",                 seconds: 4 },
+    { label: "Reading your CV",                         seconds: 10 },
+    { label: "Drafting your positioning statement",     seconds: 12 },
+    { label: "Pulling out your specialties and audience", seconds: 8 },
+    { label: "Saving your draft profile",               seconds: 4 },
+  ];
+  const GEN_EXPECTED = GEN_STAGES.reduce((t, x) => t + x.seconds, 0);
+
+  const [genStage, setGenStage] = useState(0);
+  const [genElapsed, setGenElapsed] = useState(0);
+
+  // One ticker. It advances the stage on real elapsed time and stops one short of
+  // the end - the last stage only completes when the response actually lands.
+  useEffect(() => {
+    if (!generating) { setGenStage(0); setGenElapsed(0); return; }
+    const startedAt = Date.now();
+    const id = window.setInterval(() => {
+      const secs = (Date.now() - startedAt) / 1000;
+      setGenElapsed(secs);
+      let acc = 0, idx = 0;
+      for (let i = 0; i < GEN_STAGES.length; i++) {
+        acc += GEN_STAGES[i].seconds;
+        if (secs < acc) { idx = i; break; }
+        idx = GEN_STAGES.length - 1;
+      }
+      setGenStage(idx);
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [generating]);
   const [generated, setGenerated] = useState<Record<string, any> | null>(null);
 
   // Step 2 — tag keys
@@ -456,6 +500,8 @@ export default function CoachOnboarding() {
         if (!data?.ok) throw new Error(data?.error || "Generation returned nothing");
 
         setGenerated(data.generated);
+        // Kept so the coach can look at their actual page before signing off.
+        if (data.coachId) setCoachRowId(data.coachId);
         if (data.generated?.bio) setBio(data.generated.bio);
       } catch (e: any) {
         setGenError(
@@ -500,38 +546,46 @@ export default function CoachOnboarding() {
         const { data: { session } } = await supabase.auth.getSession();
         if (!session) throw new Error("Not authenticated");
 
-        await supabase.from("profiles").update({
+        const { error: profileErr } = await supabase.from("profiles").update({
           full_name: fullName.trim() || null,
           user_role: currentRole.trim() || null,
           linkedin_url: linkedinUrl.trim() || null,
         }).eq("id", session.user.id);
+        if (profileErr) console.error("profiles update failed:", profileErr);
 
-        // Upsert coach application with tag + product data
-        const { data: existing } = await supabase
-          .from("coach_applications").select("id").eq("user_id", session.user.id).maybeSingle();
-        const appData = {
-          user_id: session.user.id,
-          email: session.user.email!,
-          full_name: fullName.trim() || null,
-          bio: bio.trim() || null,
-          current_role: currentRole.trim() || null,
-          linkedin_url: linkedinUrl.trim() || null,
-          booking_url: bookingUrl.trim() || null,
-          specialty_tags: specialtyTags,
-          audience_tags: audienceTags,
-          style_tags: styleTags,
-          industry_tags: industryTags,
-          availability_tag: availabilityTag[0] || null,
-          enterprise_tags: enterpriseTags,
-          credential_tags: credentialTags,
-          pending_product: pendingProduct,
-          onboarding_status: "pending",
-          status: "pending",
-        };
-        if (existing) {
-          await supabase.from("coach_applications").update(appData).eq("id", existing.id);
-        } else {
-          await supabase.from("coach_applications").insert(appData);
+        // Save the tag + product half of onboarding SERVER-SIDE.
+        //
+        // This used to run here in the browser as select-then-insert-or-update.
+        // RLS on `coach_applications` restricts SELECT to is_admin(), so the
+        // select always came back empty, the code always took the insert branch,
+        // and every coach ended up with two rows: the /apply row carrying the AI
+        // fit score, and this one carrying the tags. Neither could be approved.
+        // None of the three writes checked their error, so it looked like it worked.
+        //
+        // save-coach-onboarding runs with the service role, finds the existing
+        // row, and updates it. Identity comes from the session token, not the body.
+        const { data: saved, error: saveErr } = await supabase.functions.invoke(
+          "save-coach-onboarding",
+          {
+            body: {
+              fullName: fullName.trim() || null,
+              bio: bio.trim() || null,
+              currentRole: currentRole.trim() || null,
+              linkedinUrl: linkedinUrl.trim() || null,
+              bookingUrl: bookingUrl.trim() || null,
+              specialtyTags, audienceTags, styleTags, industryTags,
+              availabilityTag: availabilityTag[0] || null,
+              enterpriseTags, credentialTags, pendingProduct,
+            },
+          },
+        );
+        // invoke RESOLVES on a non-2xx rather than throwing, so the failure has
+        // to be read off the result. Missing this is what hid the bug above.
+        if (saveErr || saved?.error) {
+          throw new Error(saved?.error || saveErr?.message || "Could not save your profile.");
+        }
+        if (saved?.duplicates?.length) {
+          console.warn("Duplicate application rows still on file:", saved.duplicates);
         }
 
         persistProgress(6);
@@ -543,6 +597,65 @@ export default function CoachOnboarding() {
       console.error("Submit error:", err);
       setState("form");
       toast({ title: "Submission failed", description: err.message || "Please try again.", variant: "destructive" });
+    }
+  };
+
+  // ── The coach's own sign-off ────────────────────────────────────────────────
+  //
+  // Three separate yeses stand between an application and a live page:
+  //
+  //   1. ADMISSION      the AI score, 70+ automatic, otherwise an admin
+  //   2. THIS ONE       the coach reads the profile written about them and
+  //                      confirms it is true and theirs
+  //   3. PUBLICATION    an admin reads it against the Galoras standard and
+  //                      puts it live
+  //
+  // This step exists because the profile is generated FROM the coach's documents
+  // by a machine. They are the only person who can tell us it got their life
+  // right. Nobody else can check that, and publishing something untrue about a
+  // coach is worse than publishing nothing.
+  //
+  // No card is taken here. Coaches are free until January, and asking for
+  // payment before they have seen their own page published is how you lose them
+  // at the final step.
+  const handleSignOff = async () => {
+    setState("submitting");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const { data, error } = await supabase.functions.invoke("save-coach-onboarding", {
+        body: {
+          fullName: fullName.trim() || null,
+          bio: bio.trim() || null,
+          currentRole: currentRole.trim() || null,
+          linkedinUrl: linkedinUrl.trim() || null,
+          bookingUrl: bookingUrl.trim() || null,
+          specialtyTags, audienceTags, styleTags, industryTags,
+          availabilityTag: availabilityTag[0] || null,
+          enterpriseTags, credentialTags, pendingProduct,
+          selectedTier: activeTier || "pro",
+          coachApproved: true,
+        },
+      });
+      if (error || data?.error) {
+        throw new Error(data?.error || error?.message || "Could not submit your profile.");
+      }
+
+      if (userId) sessionStorage.removeItem(storageKey(userId));
+      setState("success");
+      toast({
+        title: "Submitted for review",
+        description: "We'll come back to you once your profile has been reviewed.",
+      });
+    } catch (err: any) {
+      console.error("Sign-off error:", err);
+      setState("form");
+      toast({
+        title: "Could not submit",
+        description: err.message || "Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -822,6 +935,64 @@ export default function CoachOnboarding() {
                         )}
                       </div>
 
+                      {generating && (
+                        <div className="rounded-lg border border-zinc-700 bg-zinc-900/70 p-5 space-y-4">
+                          <div className="flex items-baseline justify-between gap-3">
+                            <p className="text-sm font-medium text-white">
+                              Writing your profile
+                            </p>
+                            <p className="text-xs text-zinc-500 tabular-nums">
+                              {genElapsed < GEN_EXPECTED
+                                ? `about ${Math.max(5, Math.round(GEN_EXPECTED - genElapsed))}s left`
+                                : "almost there"}
+                            </p>
+                          </div>
+
+                          <ul className="space-y-2.5">
+                            {GEN_STAGES.map((stg, i) => {
+                              const done = i < genStage;
+                              const now = i === genStage;
+                              return (
+                                <li key={stg.label} className="flex items-center gap-3">
+                                  <span className="w-4 shrink-0 flex items-center justify-center">
+                                    {done
+                                      ? <Check className="h-4 w-4 text-emerald-400" />
+                                      : now
+                                        ? <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                        : <span className="h-1.5 w-1.5 rounded-full bg-zinc-700" />}
+                                  </span>
+                                  <span className={
+                                    done ? "text-sm text-zinc-500"
+                                    : now ? "text-sm text-white"
+                                    : "text-sm text-zinc-600"
+                                  }>
+                                    {stg.label}
+                                  </span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+
+                          <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-800">
+                            <div
+                              className="h-full rounded-full bg-primary transition-all duration-300"
+                              style={{ width: `${Math.min(96, (genElapsed / GEN_EXPECTED) * 100)}%` }}
+                            />
+                          </div>
+
+                          {genElapsed > GEN_EXPECTED + 15 && (
+                            <p className="text-xs text-amber-400">
+                              This is taking longer than usual — a long CV takes more reading.
+                              Still working, don’t refresh.
+                            </p>
+                          )}
+                          <p className="text-xs text-zinc-500">
+                            You’ll get to read every word and change anything you want on the next
+                            screen. Nothing is published yet.
+                          </p>
+                        </div>
+                      )}
+
                       {genError && (
                         <div className="rounded-lg border border-red-900 bg-red-950/40 p-4">
                           <p className="text-sm text-red-300">{genError}</p>
@@ -990,6 +1161,22 @@ export default function CoachOnboarding() {
                             </p>
                           </div>
 
+                          {/* Reading the text boxes is not the same as seeing the
+                              page. This opens the real thing, rendered by the same
+                              component that serves the live site, so the coach is
+                              signing off on what actually publishes. */}
+                          {coachRowId && (
+                            <a
+                              href={`/coaching/preview/${coachRowId}?preview=1`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 rounded-lg border border-primary/50 bg-primary/10 px-3 py-2 text-sm font-medium text-primary hover:bg-primary/20 transition-colors"
+                            >
+                              See your page as visitors will
+                              <span aria-hidden="true">&#8599;</span>
+                            </a>
+                          )}
+
                           {Array.isArray(generated.needs_more) && generated.needs_more.length > 0 && (
                             <div className="rounded border border-amber-900 bg-amber-950/30 p-3">
                               <p className="text-xs text-amber-300">
@@ -1024,6 +1211,27 @@ export default function CoachOnboarding() {
                         </div>
                       )}
 
+                      {/* The booking-link and LinkedIn inputs that briefly
+                          lived here were removed on 29 September.
+
+                          They were added on the 26th because the public profile
+                          rendered both and the inputs had been cut from step 1 —
+                          so a published coach appeared to have no way to be
+                          reached. That reasoning belonged to an older
+                          positioning, where Galoras was a directory you found
+                          someone in and then contacted them elsewhere.
+
+                          The proposition now is that the meeting happens ON
+                          Galoras: the session is hosted here, recorded here,
+                          turned into actions here, and briefed back to the coach
+                          here. A Calendly link or a LinkedIn profile on a coach
+                          page is a route around all of that. The coachee
+                          enquires through the platform instead, and the coach is
+                          emailed by send-contact-message.
+
+                          Do not reintroduce either without changing the
+                          proposition first. */}
+
                       <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-4`}>
                         {[
                           { label: "Name", value: fullName },
@@ -1056,16 +1264,21 @@ export default function CoachOnboarding() {
                   {/* ── Step 6 — Tier Selection ── */}
                   {step === 6 && (
                     <>
-                      {activeTier && (
-                        <CoachTierPayment
-                          tier={activeTier}
-                          onClose={() => setActiveTier(null)}
-                          onSuccess={() => {
-                            if (userId) sessionStorage.removeItem(storageKey(userId));
-                            setState("success");
-                          }}
-                        />
-                      )}
+                      {/* CoachTierPayment is deliberately NOT rendered here.
+                          Selecting a tier used to open card collection immediately,
+                          which asked the coach to pay before they had ever seen
+                          their profile published. Coaches are free until January,
+                          so there is nothing to collect. The choice is recorded;
+                          a card is asked for after publication, if at all. */}
+                      <div className="rounded-lg border border-emerald-900/60 bg-emerald-950/30 p-4">
+                        <p className="text-sm text-emerald-300 font-medium">
+                          Free for founding coaches
+                        </p>
+                        <p className="text-sm text-zinc-400 mt-1">
+                          No card, no charge. Pick the tier you want and we will sort
+                          billing out with you later.
+                        </p>
+                      </div>
                       <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-3"} gap-4`}>
                         {TIER_OPTIONS.map(tier => (
                           <div key={tier.key}
@@ -1103,7 +1316,8 @@ export default function CoachOnboarding() {
                         ))}
                       </div>
                       <p className="text-sm text-zinc-500 text-center pt-2">
-                        Your card is saved securely — you won't be charged until Galoras approves your application.
+                        Next: we read your profile and publish it. You will hear from
+                        us either way.
                       </p>
                     </>
                   )}
@@ -1129,6 +1343,15 @@ export default function CoachOnboarding() {
                         {state === "submitting"
                           ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving...</>
                           : token ? "Submit Profile" : "Save & Choose Tier →"}
+                      </Button>
+                    ) : step === 6 ? (
+                      <Button type="button" onClick={handleSignOff}
+                        className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-11 text-base"
+                        disabled={state === "submitting" || !activeTier}>
+                        {state === "submitting"
+                          ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Submitting…</>
+                          : !activeTier ? "Pick a tier to continue"
+                          : "This is my profile — submit for review"}
                       </Button>
                     ) : null}
                   </div>
