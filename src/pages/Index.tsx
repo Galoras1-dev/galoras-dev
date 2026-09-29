@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -68,20 +69,48 @@ const COACHEE_STEPS = [
   },
 ];
 
-function scrollToForm() {
-  document.getElementById("early-access")?.scrollIntoView({ behavior: "smooth", block: "start" });
+type Audience = "member" | "coach";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Why this is more than a scroll.
+//
+// The first version of the hero buttons only called scrollIntoView. On a laptop
+// the form sits in the right-hand column of the hero, so it is ALREADY on
+// screen, nothing moves, and both buttons look broken. On a phone it worked,
+// which is exactly how a bug like this survives a quick check.
+//
+// So a click now does three things, and at least one of them is always visible:
+//   1. sets the audience   - the toggle flips, which is the point of the button
+//   2. scrolls             - only has an effect where the form is off screen
+//   3. focuses and flashes - feedback on a laptop, where nothing scrolled
+// ─────────────────────────────────────────────────────────────────────────────
+function useFormJump(setAudience: (a: Audience) => void) {
+  return (a: Audience) => {
+    setAudience(a);
+    const el = document.getElementById("early-access");
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("ring-2", "ring-primary", "rounded-2xl");
+    window.setTimeout(() => {
+      // preventScroll: the smooth scroll above is already running and focus
+      // would otherwise jump it to the top instantly.
+      (document.getElementById("ea-name") as HTMLInputElement | null)
+        ?.focus({ preventScroll: true });
+    }, 350);
+    window.setTimeout(() => {
+      el.classList.remove("ring-2", "ring-primary", "rounded-2xl");
+    }, 1400);
+  };
 }
 
 function Track({
   eyebrow,
   title,
   steps,
-  cta,
 }: {
   eyebrow: string;
   title: string;
   steps: { label: string; body: string }[];
-  cta: string;
 }) {
   return (
     <div className="rounded-3xl border border-border bg-card p-8 lg:p-10">
@@ -92,7 +121,7 @@ function Track({
         {title}
       </h3>
 
-      <ol className="mb-9 space-y-7">
+      <ol className="space-y-7">
         {steps.map((s, i) => (
           <li key={s.label} className="flex gap-5">
             <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-primary/10 font-display text-sm font-bold text-primary">
@@ -106,19 +135,14 @@ function Track({
         ))}
       </ol>
 
-      <Button
-        size="lg"
-        onClick={scrollToForm}
-        className="h-12 w-full bg-primary text-base font-semibold text-primary-foreground hover:bg-primary/90"
-      >
-        {cta}
-        <ArrowRight className="ml-2 h-4 w-4" />
-      </Button>
     </div>
   );
 }
 
 export default function Index() {
+  const [audience, setAudience] = useState<Audience>("member");
+  const jump = useFormJump(setAudience);
+
   return (
     <Layout>
       <SEO
@@ -169,7 +193,7 @@ export default function Index() {
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <Button
                   size="lg"
-                  onClick={scrollToForm}
+                  onClick={() => jump("member")}
                   className="h-14 bg-primary px-8 text-base font-semibold text-primary-foreground hover:bg-primary/90 glow-primary"
                 >
                   Get early access
@@ -178,7 +202,7 @@ export default function Index() {
                 <Button
                   size="lg"
                   variant="outline"
-                  onClick={scrollToForm}
+                  onClick={() => jump("coach")}
                   className="h-14 border-primary/50 px-8 text-base text-foreground hover:bg-primary/10"
                 >
                   Apply as a founding coach
@@ -187,7 +211,7 @@ export default function Index() {
             </div>
 
             <div id="early-access" className="scroll-mt-24">
-              <EarlyAccess />
+              <EarlyAccess audience={audience} onAudienceChange={setAudience} />
             </div>
           </div>
         </div>
@@ -210,13 +234,11 @@ export default function Index() {
               eyebrow="If you coach"
               title="Get work. Do the work. Run the work."
               steps={COACH_STEPS}
-              cta="Apply as a founding coach"
             />
             <Track
               eyebrow="If you're looking for a coach"
               title="Find the human. Do the work together. Keep moving."
               steps={COACHEE_STEPS}
-              cta="Get early access"
             />
           </div>
         </div>
@@ -225,7 +247,15 @@ export default function Index() {
       {/* Real published coaches. Renders nothing while there are none. */}
       <FeaturedCoaches />
 
-      {/* ── Close ────────────────────────────────────────────────────────── */}
+      {/* ── Close ──────────────────────────────────────────────────────────
+          ONE call to action, and it is a different one from the hero.
+
+          An earlier version had five buttons on this page — two in the hero,
+          two on the journey cards, one here — and every single one scrolled to
+          the same form. A visitor cannot tell five identical buttons apart, so
+          they read as a page that does not know what it wants. This section now
+          does the only job the hero cannot: it speaks to somebody who has
+          already read the whole page and has still not moved. */}
       <section className="section-padding hero-gradient">
         <div className="container-wide max-w-3xl text-center">
           <h2 className="mb-5 font-display text-3xl font-bold md:text-4xl">
@@ -238,22 +268,19 @@ export default function Index() {
             shape it, and join free at launch — subject to approval. We read every
             application and take on a few at a time.
           </p>
-          <Button
-            size="lg"
-            onClick={scrollToForm}
-            className="h-14 bg-primary px-8 text-base font-semibold text-primary-foreground hover:bg-primary/90"
-          >
-            Apply as a founding coach
-            <ArrowRight className="ml-2 h-5 w-5" />
+          <Button asChild size="lg"
+            className="h-14 bg-primary px-8 text-base font-semibold text-primary-foreground hover:bg-primary/90">
+            <Link to="/apply">
+              Start a coach application
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </Link>
           </Button>
           <p className="mt-6 text-sm text-muted-foreground">
-            Already spoken to us?{" "}
-            <Link to="/apply" className="text-primary underline underline-offset-4 hover:text-primary/80">
-              Go to the full application
-            </Link>
+            Five questions in your own words and one document. About ten minutes.
           </p>
         </div>
       </section>
+
     </Layout>
   );
 }

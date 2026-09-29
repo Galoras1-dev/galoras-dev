@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Layout } from "@/components/layout";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,19 @@ export default function Apply() {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [ndaAccepted, setNdaAccepted] = useState(false);
+  // One question, optional, and the only reliable way to tell a coach who came
+  // through Conor's network from one who found Galoras on their own. The first
+  // option is the one that answers it.
+  const HEARD_ABOUT_OPTIONS = [
+    "Someone at Galoras told me about it",
+    "A coach or client I know",
+    "LinkedIn",
+    "Search engine",
+    "A podcast, article or newsletter",
+    "An event or conference",
+    "Somewhere else",
+  ];
+
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
@@ -75,7 +88,27 @@ export default function Apply() {
     leadership_experience_years: "",
     current_role: "",
     coaching_experience_level: "",
+    heard_about_us: "",
   });
+
+  // A coach who gave their name and email on the homepage should not be asked
+  // for them again three seconds later. Read from sessionStorage rather than a
+  // query parameter - an email in a URL ends up in history, referrers and logs.
+  useEffect(() => {
+    try {
+      const n = sessionStorage.getItem("galoras_prefill_name");
+      const e = sessionStorage.getItem("galoras_prefill_email");
+      if (n || e) {
+        setFormData(prev => ({
+          ...prev,
+          full_name: prev.full_name || n || "",
+          email: prev.email || e || "",
+        }));
+        sessionStorage.removeItem("galoras_prefill_name");
+        sessionStorage.removeItem("galoras_prefill_email");
+      }
+    } catch { /* private browsing - they type it again */ }
+  }, []);
 
   const backgroundConfig = formData.coach_background
     ? BACKGROUND_DETAIL_CONFIG[formData.coach_background]
@@ -96,6 +129,45 @@ export default function Apply() {
     return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   };
 
+  // ── Where did this coach come from? ────────────────────────────────────────
+  //
+  // The plan is to revisit pricing once 20 coaches have onboarded who did NOT
+  // come from Conor's own network. Nothing in the system recorded that, so the
+  // number could never have been counted - and it cannot be reconstructed after
+  // the fact. Captured at submit, silently, from what the browser already knows.
+  //
+  // Deliberately NOT personal data: the referring page and any campaign tags the
+  // link carried. No fingerprinting, nothing stored that identifies a person, and
+  // nothing put in a URL.
+  const captureSource = () => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const utm: Record<string, string> = {};
+      for (const key of ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "ref"]) {
+        const v = params.get(key);
+        if (v) utm[key] = v.slice(0, 120);
+      }
+
+      const raw = document.referrer || "";
+      let referrerHost: string | null = null;
+      if (raw) {
+        try {
+          const u = new URL(raw);
+          // Host only. The full referring URL can carry a search query the person
+          // typed, which is more than we need and more than we should keep.
+          referrerHost = u.host === window.location.host ? null : u.host;
+        } catch { referrerHost = null; }
+      }
+
+      return {
+        referrer_host: referrerHost,
+        utm: Object.keys(utm).length > 0 ? utm : null,
+      };
+    } catch {
+      return { referrer_host: null, utm: null };
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -107,6 +179,7 @@ export default function Apply() {
       // .select() would fail RLS. Generating the id here gives us what the next
       // steps need without reading anything back.
       const applicationId = crypto.randomUUID();
+      const src = captureSource();
 
       // Profile photo is collected post-approval in the coach profile editor
       // (where the user is authenticated). The public /apply form does not upload
@@ -135,6 +208,12 @@ export default function Apply() {
         coaching_philosophy: formData.coaching_philosophy || null,
         nda_accepted: ndaAccepted,
         nda_accepted_at: ndaAccepted ? new Date().toISOString() : null,
+        // How they found Galoras. The self-reported answer is the one that
+        // answers "did this come from my network"; the referrer and campaign tags
+        // are the automatic backstop for the coaches who skip the question.
+        heard_about_us: formData.heard_about_us || null,
+        source_referrer: src.referrer_host,
+        source_utm: src.utm,
       };
 
       // Plain insert (no .select()) → return=minimal, so PostgREST does not read
@@ -370,6 +449,24 @@ export default function Apply() {
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+
+                  {/* How they found us. Optional on purpose - a required question
+                      at the end of a long form costs applications, and the
+                      referrer capture covers the ones who skip it. */}
+                  <div className="space-y-2">
+                    <Label>How did you hear about Galoras? <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                    <Select
+                      value={formData.heard_about_us}
+                      onValueChange={(v) => setFormData({ ...formData, heard_about_us: v })}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Select one" /></SelectTrigger>
+                      <SelectContent>
+                        {HEARD_ABOUT_OPTIONS.map((opt) => (
+                          <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   {/* NDA Consent */}
