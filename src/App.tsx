@@ -123,6 +123,13 @@ function AppRoutes() {
           <Route path="/coaching/why" element={<WhyCoaching />} />
           <Route path="/coaching/onboarding" element={<CoachOnboarding />} />
           <Route path="/coach/:slug" element={<PaymentGate><CoachProfile /></PaymentGate>} />
+          {/* Preview by coach id, for the two people who need to see a profile
+              before it is published: the coach it belongs to, and an admin.
+              Same component as the live page - that is the point of it. The
+              route carries no payment gate because a coach previewing their own
+              unpublished page is not a visitor buying anything, and the edge
+              function behind it refuses anyone else. */}
+          <Route path="/coaching/preview/:coachId" element={<CoachProfile />} />
           <Route path="/coach/onboarding" element={<CoachOnboardingRedirect />} />
           <Route path="/onboard/:shortId" element={<OnboardRedirect />} />
 
