@@ -7,7 +7,7 @@ import {
   Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer,
 } from "recharts";
 import {
-  CheckCircle2, XCircle, RefreshCw, Clock, User,
+  CheckCircle2, XCircle, RefreshCw, Clock, User, UserCheck,
   Linkedin, Globe, Mail, Phone, Loader2, Sparkles, Zap,
   AlertTriangle, TrendingUp, Tags, Save, Link2, Copy,
 } from "lucide-react";
@@ -79,10 +79,24 @@ const TAG_FAMILIES: { family: string; column: string; label: string; single?: bo
   { family: "availability", column: "availability_tag", label: "Availability", single: true },
 ];
 
+// Three decisions, three groups of status. Reading this list top to bottom is
+// the coach's journey:
+//
+//   under_review    the AI is scoring the application
+//   pending         scored below the accept line - a human decides
+//   accepted        admitted automatically (70+). Building their profile now.
+//                   NOT live, NOT charged.
+//   coach_approved  the coach has read their generated profile and signed off.
+//                   This is the queue that needs YOU.
+//   approved        published on galoras.com
+//
+//   revision_requested / rejected / auto_rejected as before.
 const STATUS_BADGE: Record<string, { label: string; color: string }> = {
   pending:            { label: "Pending",        color: "bg-zinc-700/60 text-zinc-300 border-zinc-600" },
   under_review:       { label: "AI Analysing",   color: "bg-sky-900/60 text-sky-300 border-sky-700" },
-  approved:           { label: "Approved",       color: "bg-emerald-900/60 text-emerald-300 border-emerald-700" },
+  accepted:           { label: "Accepted",       color: "bg-indigo-900/60 text-indigo-300 border-indigo-700" },
+  coach_approved:     { label: "Ready to Review", color: "bg-violet-900/60 text-violet-200 border-violet-600" },
+  approved:           { label: "Published",      color: "bg-emerald-900/60 text-emerald-300 border-emerald-700" },
   revision_requested: { label: "Needs Revision", color: "bg-amber-900/60 text-amber-300 border-amber-700" },
   rejected:           { label: "Rejected",       color: "bg-red-900/60 text-red-400 border-red-800" },
   auto_rejected:      { label: "Auto-Rejected",  color: "bg-red-950/80 text-red-400 border-red-900" },
@@ -207,6 +221,43 @@ export default function Applicants() {
   }, []);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // ── the draft page behind the selected application ─────────────────────────
+  //
+  // An application row and a coaches row are two different things. The profile
+  // lives on `coaches`, created as a draft by generate-coach-profile, and the
+  // only link back to the application is the user id or the email.
+  //
+  // Resolved here so an admin can look at the actual page before publishing it.
+  // Publishing something you have not read is how a bad profile goes out under
+  // the Galoras name.
+  const [previewCoachId, setPreviewCoachId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setPreviewCoachId(null);
+    if (!selected) return;
+
+    (async () => {
+      let found: string | null = null;
+
+      if (selected.user_id) {
+        const { data } = await supabase
+          .from("coaches").select("id")
+          .eq("user_id", selected.user_id).limit(1).maybeSingle();
+        found = data?.id ?? null;
+      }
+      if (!found && selected.email) {
+        const { data } = await supabase
+          .from("coaches").select("id")
+          .eq("email", selected.email).limit(1).maybeSingle();
+        found = data?.id ?? null;
+      }
+      if (!cancelled) setPreviewCoachId(found);
+    })();
+
+    return () => { cancelled = true; };
+  }, [selected?.id, selected?.user_id, selected?.email]);
 
   const selectApp = (app: Application) => {
     setSelected(app);
@@ -478,6 +529,25 @@ export default function Applicants() {
                     </div>
 
                     <p className="text-sm font-bold text-white text-center mb-3">{selected.full_name}</p>
+
+                    {/* Read the page before you publish it. Same component as the
+                        live site, so this is not an approximation of the profile -
+                        it is the profile. */}
+                    {previewCoachId ? (
+                      <a
+                        href={`/coaching/preview/${previewCoachId}?preview=1`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mb-3 flex items-center justify-center gap-2 rounded-lg border border-violet-600/60 bg-violet-950/40 px-3 py-2 text-xs font-semibold text-violet-200 hover:bg-violet-900/50 transition-colors"
+                      >
+                        <Globe className="h-3.5 w-3.5" />
+                        Preview their page
+                      </a>
+                    ) : (
+                      <p className="mb-3 text-center text-xs text-slate-600">
+                        No profile drafted yet
+                      </p>
+                    )}
 
                     {/* Credential list */}
                     <div className="space-y-1.5">
@@ -754,12 +824,14 @@ export default function Applicants() {
                 <div className="rounded-xl border border-[#1e3a5f] bg-[#0d1f35] p-4">
                   <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Pipeline</h3>
                   {[
-                    { label: "Pending",       status: "pending",            icon: Clock },
-                    { label: "AI Analysing",  status: "under_review",       icon: Sparkles },
-                    { label: "Approved",      status: "approved",           icon: CheckCircle2 },
-                    { label: "Revision",      status: "revision_requested", icon: RefreshCw },
-                    { label: "Rejected",      status: "rejected",           icon: XCircle },
-                    { label: "Auto-Rejected", status: "auto_rejected",      icon: XCircle },
+                    { label: "AI Analysing",    status: "under_review",       icon: Sparkles },
+                    { label: "Pending",         status: "pending",            icon: Clock },
+                    { label: "Accepted",        status: "accepted",           icon: UserCheck },
+                    { label: "Ready to Review", status: "coach_approved",     icon: CheckCircle2 },
+                    { label: "Published",       status: "approved",           icon: Globe },
+                    { label: "Revision",        status: "revision_requested", icon: RefreshCw },
+                    { label: "Rejected",        status: "rejected",           icon: XCircle },
+                    { label: "Auto-Rejected",   status: "auto_rejected",      icon: XCircle },
                   ].map(({ label, status, icon: Icon }) => {
                     const count = applications.filter(a => (a.review_status ?? "pending") === status).length;
                     return (
