@@ -55,11 +55,22 @@ function captureSource() {
   }
 }
 
-export function EarlyAccess({ initialAudience = "member" }: { initialAudience?: Audience }) {
-  const [audience, setAudience] = useState<Audience>(initialAudience);
+// The audience is CONTROLLED from the page.
+//
+// The hero has two buttons - "Get early access" and "Apply as a founding coach"
+// - and they must do more than move the viewport. On a laptop the form sits
+// beside the hero, so it is already on screen and a scroll produces no visible
+// change at all: the buttons read as broken. They now set the audience, which is
+// a visible change wherever the form happens to be.
+export function EarlyAccess({
+  audience,
+  onAudienceChange,
+}: {
+  audience: Audience;
+  onAudienceChange: (a: Audience) => void;
+}) {
   const [firstName, setFirstName] = useState("");
   const [email, setEmail] = useState("");
-  const [profileUrl, setProfileUrl] = useState("");
   const [marketing, setMarketing] = useState(false);
   const [state, setState] = useState<"idle" | "saving" | "done" | "already">("idle");
   const [error, setError] = useState("");
@@ -78,7 +89,6 @@ export function EarlyAccess({ initialAudience = "member" }: { initialAudience?: 
       first_name: firstName.trim(),
       email: email.trim().toLowerCase(),
       audience,
-      profile_url: audience === "coach" && profileUrl.trim() ? profileUrl.trim() : null,
       marketing_consent: marketing,
       // Records WHEN they consented, which is the part that matters if anyone
       // ever asks. Null when they did not.
@@ -98,6 +108,16 @@ export function EarlyAccess({ initialAudience = "member" }: { initialAudience?: 
       return;
     }
 
+    // Carried to /apply so a coach is not asked for the same address twice.
+    // sessionStorage rather than a query parameter: an email address in a URL
+    // ends up in browser history, referrer headers and server logs.
+    if (audience === "coach") {
+      try {
+        sessionStorage.setItem("galoras_prefill_name", firstName.trim());
+        sessionStorage.setItem("galoras_prefill_email", email.trim().toLowerCase());
+      } catch { /* private browsing - the coach types it again, no worse */ }
+    }
+
     setState("done");
   };
 
@@ -111,11 +131,38 @@ export function EarlyAccess({ initialAudience = "member" }: { initialAudience?: 
         <h3 className="font-display text-xl font-bold text-foreground">
           {state === "already" ? "You're already on the list" : `Thanks, ${firstName.trim()}.`}
         </h3>
-        <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
-          {isCoach
-            ? "We'll be in touch when we're reviewing the next group of founding coaches. Every application is read by a person, and we take on a small number at a time."
-            : "We'll email you when Galoras opens to the public in January 2027. Nothing else in the meantime."}
-        </p>
+
+        {isCoach ? (
+          <>
+            {/* A coach who has given an email is warm RIGHT NOW. Sending them
+                away to wait for a reply wastes that. The real application is
+                built and live, so the honest next step is to offer it here,
+                while they are still in the chair. */}
+            <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
+              Next is the application itself: five questions in your own words and
+              one document — a CV, a bio, or your LinkedIn saved as a PDF. It takes
+              about ten minutes, and we read every one.
+            </p>
+            <Button
+              asChild
+              size="lg"
+              className="mt-6 h-12 w-full bg-primary text-base font-semibold text-primary-foreground hover:bg-primary/90"
+            >
+              <a href="/apply">
+                Start your application
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </a>
+            </Button>
+            <p className="mt-4 text-xs text-muted-foreground">
+              Not now? We have your email and we'll come back to you.
+            </p>
+          </>
+        ) : (
+          <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-muted-foreground">
+            We'll email you when Galoras opens to the public in January 2027.
+            Nothing else in the meantime.
+          </p>
+        )}
       </div>
     );
   }
@@ -132,7 +179,7 @@ export function EarlyAccess({ initialAudience = "member" }: { initialAudience?: 
           <button
             key={key}
             type="button"
-            onClick={() => setAudience(key)}
+            onClick={() => onAudienceChange(key)}
             className={[
               "rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
               audience === key
@@ -169,24 +216,6 @@ export function EarlyAccess({ initialAudience = "member" }: { initialAudience?: 
           />
         </div>
 
-        {audience === "coach" && (
-          <div className="space-y-2">
-            <Label htmlFor="ea-profile">
-              LinkedIn or your website{" "}
-              <span className="font-normal normal-case text-muted-foreground">(optional)</span>
-            </Label>
-            <Input
-              id="ea-profile"
-              value={profileUrl}
-              onChange={e => setProfileUrl(e.target.value)}
-              placeholder="linkedin.com/in/your-name"
-              className="h-12 text-base"
-            />
-            <p className="text-xs text-muted-foreground">
-              It saves us both a round of emails.
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Optional, and separate. Being told when Galoras opens is what they just
@@ -224,7 +253,7 @@ export function EarlyAccess({ initialAudience = "member" }: { initialAudience?: 
         {state === "saving"
           ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Adding you…</>
           : audience === "coach"
-            ? <>Apply as a founding coach<ArrowRight className="ml-2 h-4 w-4" /></>
+            ? <>Continue to the application<ArrowRight className="ml-2 h-4 w-4" /></>
             : <>Get early access<ArrowRight className="ml-2 h-4 w-4" /></>}
       </Button>
 
