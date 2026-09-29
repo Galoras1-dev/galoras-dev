@@ -11,7 +11,25 @@ anything.
 
 ---
 
-## The four rules
+## The rules
+
+### 0. THIS REPO IS NOT THE PLAN. The North Star is.
+
+**Everything happens on the Galoras platform.** A coachee finds a coach here,
+meets them here, the session is recorded and transcribed here, the transcript
+becomes the actions they work on between sessions, and the coach is briefed here
+before the next one. **Nothing routes off the platform.** No external booking
+link, no Calendly, no "message them on LinkedIn", no `mailto:` to a coach.
+
+Most of this codebase was written against assumptions that were never Galoras's.
+`booking_url` is the clearest example: it has sat in the schema and in a dozen
+components for months and **was never part of the product.** Anyone reading the
+code as a statement of intent will reintroduce it, because it looks deliberate.
+
+**Never infer product intent from what is in here.** If a column, a field or a
+flow implies a product decision, check it against the North Star document in the
+Galoras project, or ask. Where the two disagree, the document is right and the
+code is wrong.
 
 ### 1. Test the live system first. Read code second, to explain what the test showed.
 
