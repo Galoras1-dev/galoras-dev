@@ -40,6 +40,29 @@
     Permissions-Policy = "geolocation=(), microphone=(), camera=()"
     Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
 
+# ── LinkedIn and the 206 ──────────────────────────────────────────────────
+# Netlify honours a Range header and answers 206 Partial Content. LinkedIn's
+# crawler sends one, and its Post Inspector logs "1 206 Success" against
+# galoras.com. It reads og:title and og:description - both of which sit AFTER
+# og:image in the document - so it sees the image tag and then rejects the
+# image itself. Confirmed 30 September 2026: a URL LinkedIn had never scraped
+# before failed identically, so this is not a cached miss.
+#
+# Accept-Ranges: none tells clients this resource is not rangeable. Videos are
+# served from Supabase storage, not from this origin, so nothing here needs
+# range requests.
+[[headers]]
+  for = "/galoras-og.png"
+  [headers.values]
+    Accept-Ranges = "none"
+    Cache-Control = "public, max-age=3600"
+    Content-Type = "image/png"
+
+[[headers]]
+  for = "/"
+  [headers.values]
+    Accept-Ranges = "none"
+
 # Cache index.html with no-cache
 [[headers]]
   for = "/index.html"
