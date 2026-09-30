@@ -4,36 +4,50 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
-    <!-- SEO Meta Tags -->
-    <!--
-      THESE TAGS ARE WHAT LINKEDIN, GOOGLE, X, WHATSAPP AND SLACK READ.
-      Their crawlers do not run JavaScript, so they never see the React page.
-      Whatever is here IS the link preview. If the homepage copy changes,
-      change these in the same commit.
-    -->
+    <!-- Open Graph. ORDER IS LOAD-BEARING - see the note below. -->
+    <meta property="og:image" content="https://galoras.com/galoras-og.png" />
+    <meta property="og:image:secure_url" content="https://galoras.com/galoras-og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Galoras - Do More. Do It Now. AI that enables human connection." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://galoras.com" />
+    <meta property="og:site_name" content="Galoras" />
+    <meta property="og:title" content="Do More. Do It Now. | Galoras" />
+    <meta property="og:description" content="Find the right coach. Meet in one place. Keep the work moving between sessions. Opening January 2027." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://galoras.com/galoras-og.png" />
+    <meta name="twitter:title" content="Do More. Do It Now. | Galoras" />
+    <meta name="twitter:description" content="Find the right coach. Meet in one place. Keep the work moving between sessions. Opening January 2027." />
+
     <title>Galoras | AI that enables human connection</title>
     <meta name="description" content="Find the right coach. Meet in one place. Keep the work moving between sessions. Galoras is a coaching platform built for the whole relationship, not just the introduction. Opening January 2027." />
     <meta name="keywords" content="executive coaching, coaching platform, leadership coaching, coach matching, coaching software, business coaching, performance coaching" />
     <meta name="author" content="Galoras" />
-    
-    <!-- Open Graph -->
-    <meta property="og:site_name" content="Galoras" />
-    <meta property="og:title" content="Do More. Do It Now. | Galoras" />
-    <meta property="og:description" content="Find the right coach. Meet in one place. Keep the work moving between sessions. Opening January 2027." />
-    <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://galoras.com" />
-    <!-- Absolute URL deliberately: LinkedIn silently drops relative image paths. -->
-    <meta property="og:image" content="https://galoras.com/galoras-og.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Galoras — Do More. Do It Now. AI that enables human connection." />
-    
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Do More. Do It Now. | Galoras" />
-    <meta name="twitter:description" content="Find the right coach. Meet in one place. Keep the work moving between sessions. Opening January 2027." />
-    <meta name="twitter:image" content="https://galoras.com/galoras-og.png" />
-    
+
+    <!-- ─────────────────────────────────────────────────────────────────
+         WHY THE SOCIAL TAGS ARE FIRST AND THIS NOTE IS LAST.
+
+         LinkedIn fetches this page with a Range header; the CDN answers 206
+         Partial Content. LinkedIn parses what it received and stops. Measured
+         30 September 2026: it stopped at about byte 1300.
+
+         Previously the SEO block and a long comment sat first, so the image
+         tag landed at byte 1515 - past the cut. LinkedIn never saw an image,
+         never saw the page type either, and guessed "Article". Title and
+         description came through only because they happened to sit above the
+         cut. The image itself was never the problem: it serves 200, image/png,
+         1200x630.
+
+         So nothing verbose goes above the tags. Not comments, not keywords,
+         not a long description. This note is down here for that reason - move
+         it up and you break the link preview again.
+
+         Crawlers do not run JavaScript, so these tags ARE the preview. If the
+         homepage copy changes, change them in the same commit.
+    ───────────────────────────────────────────────────────────────────── -->
+
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     
     <!-- Canonical -->
