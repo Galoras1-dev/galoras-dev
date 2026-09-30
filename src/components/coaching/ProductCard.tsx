@@ -38,8 +38,6 @@ const FORMAT_LABELS: Record<string, string> = {
 interface ProductCardProps {
   product:        CoachProduct;
   coachName?:     string;
-  /** booking_url from the coach record — used for enquiry mode */
-  bookingUrl?:    string | null;
   getTypeConfig?: (slug: string) => { label: string; className: string };
   /** Stripe checkout handler */
   onBookNow?:     () => void;
@@ -51,7 +49,7 @@ interface ProductCardProps {
   onCtaClick?:    () => void;
 }
 
-export function ProductCard({ product, coachName, bookingUrl, getTypeConfig, onBookNow, onRequest, onEnterprise, onCtaClick }: ProductCardProps) {
+export function ProductCard({ product, coachName, getTypeConfig, onBookNow, onRequest, onEnterprise, onCtaClick }: ProductCardProps) {
   const typeCfg = getTypeConfig
     ? getTypeConfig(product.product_type)
     : { label: product.product_type, className: "bg-zinc-500/10 border-zinc-500/30 text-zinc-400" };
@@ -98,10 +96,10 @@ export function ProductCard({ product, coachName, bookingUrl, getTypeConfig, onB
   } else if (isRequestable) {
     ctaLabel = "Request";
     ctaIcon = <Send className="mr-1.5 h-3.5 w-3.5" />;
-  } else if (bookingUrl) {
-    ctaLabel = "Book Now";
-    ctaIcon = <Calendar className="mr-1.5 h-3.5 w-3.5" />;
   } else {
+    // There is deliberately no "Book Now" branch reading an external booking
+    // URL any more. It opened the coach's own Calendly in a new tab, which took
+    // the coachee off Galoras for the one action the platform exists to host.
     ctaLabel = "Enquire";
     ctaIcon = <Mail className="mr-1.5 h-3.5 w-3.5" />;
     ctaVariant = "outline";
@@ -112,13 +110,12 @@ export function ProductCard({ product, coachName, bookingUrl, getTypeConfig, onB
     // handler must not run for a product that is not in stripe booking mode.
     if (isStripe) { (onCtaClick ?? onBookNow)!(); return; }
     if (isEnterprise && onEnterprise) { onEnterprise(); return; }
-    if (isRequestable) { onRequest!(); return; }
-    if (bookingUrl) {
-      window.open(bookingUrl, "_blank", "noopener,noreferrer");
-    } else {
-      const subject = encodeURIComponent(`Enquiry: ${product.title}${coachName ? ` — ${coachName}` : ""}`);
-      window.location.href = `mailto:hello@galoras.com?subject=${subject}`;
-    }
+    // Everything that is not a Stripe checkout or an enterprise proposal is an
+    // on-platform enquiry. The two routes this replaced both left Galoras:
+    // window.open(bookingUrl) went to the coach's Calendly, and the fallback was
+    // a mailto: to hello@galoras.com — which opened the visitor's mail client
+    // and sent the enquiry to a shared inbox rather than to the coach.
+    onRequest?.();
   };
 
   return (
