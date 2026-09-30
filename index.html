@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     
     <!-- Open Graph. ORDER IS LOAD-BEARING - see the note below. -->
-    <meta property="og:image" content="https://galoras.com/galoras-og.png" />
-    <meta property="og:image:secure_url" content="https://galoras.com/galoras-og.png" />
-    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image" content="https://galoras.com/galoras-og-v2.jpg" />
+    <meta property="og:image:secure_url" content="https://galoras.com/galoras-og-v2.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="Galoras - Do More. Do It Now. AI that enables human connection." />
@@ -17,7 +17,7 @@
     <meta property="og:title" content="Do More. Do It Now. | Galoras" />
     <meta property="og:description" content="Find the right coach. Meet in one place. Keep the work moving between sessions. Opening January 2027." />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content="https://galoras.com/galoras-og.png" />
+    <meta name="twitter:image" content="https://galoras.com/galoras-og-v2.jpg" />
     <meta name="twitter:title" content="Do More. Do It Now. | Galoras" />
     <meta name="twitter:description" content="Find the right coach. Meet in one place. Keep the work moving between sessions. Opening January 2027." />
 
@@ -27,25 +27,26 @@
     <meta name="author" content="Galoras" />
 
     <!-- ─────────────────────────────────────────────────────────────────
-         WHY THE SOCIAL TAGS ARE FIRST AND THIS NOTE IS LAST.
+         SOCIAL TAGS. WHAT WAS ACTUALLY WRONG, 30 SEPTEMBER 2026.
 
-         LinkedIn fetches this page with a Range header; the CDN answers 206
-         Partial Content. LinkedIn parses what it received and stops. Measured
-         30 September 2026: it stopped at about byte 1300.
+         The LinkedIn share card rendered with a title and no picture. Ruled
+         out, with evidence, before changing this: the tags (live and correct),
+         the image (200, image/png, 1200x630, 104KB, renders), LinkedIn's cache
+         (a never-scraped URL failed identically), truncation (og:type sat well
+         inside what LinkedIn received and still came back wrong), robots.txt
+         (allows everything), and the 206 Partial Content response - Supabase's
+         CDN does the same thing, so it cannot be disqualifying.
 
-         Previously the SEO block and a long comment sat first, so the image
-         tag landed at byte 1515 - past the cut. LinkedIn never saw an image,
-         never saw the page type either, and guessed "Article". Title and
-         description came through only because they happened to sit above the
-         cut. The image itself was never the problem: it serves 200, image/png,
-         1200x630.
+         What was left was the format. LinkedIn is markedly more reliable with
+         JPEG than PNG for og:image. The file is now a baseline JPEG at a NEW
+         filename, which also sidesteps any negative result LinkedIn had cached
+         against the old URL.
 
-         So nothing verbose goes above the tags. Not comments, not keywords,
-         not a long description. This note is down here for that reason - move
-         it up and you break the link preview again.
+         Tags stay near the top of the head. Crawlers do not run JavaScript, so
+         these tags ARE the preview. If the homepage copy changes, change them
+         in the same commit.
 
-         Crawlers do not run JavaScript, so these tags ARE the preview. If the
-         homepage copy changes, change them in the same commit.
+         galoras-og.png is left in place - other things may reference it.
     ───────────────────────────────────────────────────────────────────── -->
 
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
