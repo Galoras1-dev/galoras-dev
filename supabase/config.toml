@@ -28,3 +28,7 @@ verify_jwt = false
 
 [functions.compare-coach-fit]
 verify_jwt = false
+
+# Whereby cannot send a Supabase JWT; authenticity is the Whereby-Signature header.
+[functions.whereby-webhook]
+verify_jwt = false

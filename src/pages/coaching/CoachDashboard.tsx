@@ -28,6 +28,7 @@ import { CoachPipelineCalendar } from '@/components/coaching/portal/CoachPipelin
 import { CoachRevenueDashboard } from '@/components/coaching/portal/CoachRevenueDashboard';
 import { CoachProfileEditor } from '@/components/coaching/portal/CoachProfileEditor';
 import { CoachUpcomingSessions } from '@/components/coaching/CoachUpcomingSessions';
+import { SessionTranscripts } from '@/components/coaching/SessionTranscripts';
 
 const DAYS_OF_WEEK = [
   { value: 0, label: 'Sunday' },
@@ -256,6 +257,7 @@ export default function CoachDashboard() {
         <main className="flex-1 overflow-y-auto p-6">
           {/* Upcoming sessions — sessions-backed list with Join buttons */}
           {activeTab === 'overview' && <CoachUpcomingSessions />}
+          {activeTab === 'overview' && <SessionTranscripts />}
 
           {/* Overview tab */}
           {activeTab === 'overview' && (

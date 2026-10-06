@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { AddToCalendarDropdown } from '@/components/coaching/AddToCalendarDropdown';
 import { MyUpcomingSessions } from '@/components/coaching/MyUpcomingSessions';
+import { SessionTranscripts } from '@/components/coaching/SessionTranscripts';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -368,6 +369,7 @@ export default function Dashboard() {
         )}
 
         <MyUpcomingSessions />
+        <SessionTranscripts />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6">

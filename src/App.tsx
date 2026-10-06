@@ -29,6 +29,7 @@ import Dashboard from "./pages/Dashboard";
 import Pricing from "./pages/Pricing";
 import BookingSuccess from "./pages/BookingSuccess";
 import SessionRoom from "./pages/SessionRoom";
+import SessionTranscript from "./pages/SessionTranscript";
 import SubscriptionSuccess from "./pages/SubscriptionSuccess";
 import Onboarding from "./pages/Onboarding";
 import CoachSignup from "./pages/CoachSignup";
@@ -141,6 +142,7 @@ function AppRoutes() {
           {/* Core Routes */}
           <Route path="/apply" element={<Apply />} />
           <Route path="/session/:bookingId" element={<SessionRoom />} />
+          <Route path="/transcripts/:transcriptId" element={<SessionTranscript />} />
           <Route path="/about" element={<About />} />
           <Route path="/contact" element={<Contact />} />
           <Route path="/login" element={<Auth />} />
