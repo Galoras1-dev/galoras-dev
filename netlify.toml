@@ -37,7 +37,12 @@
     X-Frame-Options = "SAMEORIGIN"
     X-XSS-Protection = "1; mode=block"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+    # camera and microphone must NOT be listed as () here. That value switches
+    # them off for every page AND every iframe inside it, including the Whereby
+    # session room. Chrome enforces this header; Safari ignores it — which is
+    # exactly why sessions 1 and 2 of the pilot only worked in Safari.
+    # Fixed 6 October 2026. Do not restore.
+    Permissions-Policy = "geolocation=()"
     Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
 
 # ── LinkedIn and the 206 ──────────────────────────────────────────────────
