@@ -126,21 +126,72 @@ Weight the overall_score: pillar_alignment 25%, sport_of_business_fit 25%, profe
     if (!result) throw new Error("Failed to parse AI response");
 
     const overallScore = Math.min(100, Math.max(0, Math.round(result.overall_score ?? 0)));
-    const autoReject = overallScore < 40;
-    const newStatus = autoReject ? "auto_rejected" : "pending";
 
-    await supabase
+    // ── The admission decision, and ONLY the admission decision ───────────────
+    //
+    // Three separate decisions exist in this system and they must not be
+    // collapsed into one:
+    //
+    //   1. ADMISSION      - is this person allowed to build a Galoras profile?
+    //                       That is what this function decides, from the score.
+    //   2. COACH SIGN-OFF - has the coach read the profile we generated for them
+    //                       and confirmed it is true and theirs?
+    //   3. PUBLICATION    - does the page go live on galoras.com? An admin's
+    //                       call, and never this function's.
+    //
+    // Scoring measures fit as a coach. It says nothing about whether the copy we
+    // generated about them is good enough to publish. A strong coach with a thin
+    // CV can score 85 and still get a weak page. So a high score admits them and
+    // nothing more: it never publishes, never creates a coaches row, and never
+    // charges a card.
+
+    const ACCEPT_AT = Number(Deno.env.get("AUTO_ACCEPT_SCORE") ?? "70");
+
+    // Automatic rejection is OFF by default and must be switched on deliberately.
+    //
+    // It used to fire at any score below 40 and email the applicant a refusal.
+    // At this stage of the business that is all downside: the threshold was never
+    // examined against real data, and losing a good coach to a guessed number
+    // costs far more than reading a few applications by hand. Everything below
+    // the accept line now waits in the admin queue instead.
+    const AUTO_REJECT_ON = Deno.env.get("AUTO_REJECT_ENABLED") === "true";
+    const REJECT_BELOW = Number(Deno.env.get("AUTO_REJECT_SCORE") ?? "40");
+
+    const autoReject = AUTO_REJECT_ON && overallScore < REJECT_BELOW;
+    const autoAccept = !autoReject && overallScore >= ACCEPT_AT;
+
+    // "accepted" = admitted, may onboard, nothing published.
+    // "pending"  = a human decides.
+    const newStatus = autoReject ? "auto_rejected" : autoAccept ? "accepted" : "pending";
+
+    const reason = autoReject
+      ? `Auto-rejected by AI scoring (${overallScore}/100). ${result.summary ?? ""}`
+      : autoAccept
+        ? `Auto-accepted by AI scoring (${overallScore}/100, accept line ${ACCEPT_AT}). Profile still requires review before publication.`
+        : null;
+
+    // Checked, not fired and forgotten. An unchecked write is how the fit score
+    // silently went missing for months on end.
+    const { error: scoreWriteError } = await supabase
       .from("coach_applications")
       .update({
         fit_score: overallScore,
         fit_score_dimensions: result,
         review_status: newStatus,
         status: newStatus,
-        decision_reason: autoReject
-          ? `Auto-rejected by AI scoring (${overallScore}/100). ${result.summary ?? ""}`
-          : null,
+        decision_reason: reason,
       })
-      .eq("id", applicationId);
+      .eq("id", applicationId)
+      .select("id")
+      .single();
+
+    if (scoreWriteError) {
+      console.error("analyze-coach-application: score write FAILED", scoreWriteError);
+      return new Response(
+        JSON.stringify({ error: `Scored ${overallScore} but could not save it: ${scoreWriteError.message}` }),
+        { status: 500, headers: { "Content-Type": "application/json", ...corsHeaders } }
+      );
+    }
 
     // Send rejection email if auto-rejected
     if (autoReject) {
@@ -153,7 +204,11 @@ Weight the overall_score: pillar_alignment 25%, sport_of_business_fit 25%, profe
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: "Galoras <onboarding@resend.dev>",
+            // onboarding@resend.dev is Resend's shared sandbox sender. Mail from
+            // it is not from galoras.com and lands in spam often enough to be
+            // useless. EMAIL_FROM is set in Supabase secrets; the fallback is a
+            // real Galoras address rather than the sandbox.
+            from: Deno.env.get("EMAIL_FROM") ?? "Galoras <noreply@galoras.com>",
             to: [app.email],
             subject: "Thank you for applying to Galoras",
             html: `
@@ -164,7 +219,7 @@ Weight the overall_score: pillar_alignment 25%, sport_of_business_fit 25%, profe
                 <p>Galoras is built on the <strong>Sport of Business</strong> philosophy — we curate coaches who bring an elite, high-performance mindset to every client engagement. We receive many strong applications and can only move forward with those who align most closely with our coaching pillars and quality standards.</p>
                 <p>We encourage you to continue developing your practice. You are welcome to reapply in six months, and we'd love to see your progress.</p>
                 <p>Thank you again, and we wish you every success in your coaching journey.</p>
-                <p style="margin-top:24px">Warmly,<br/><strong>Barnes Lam</strong><br/>Founder, Galoras</p>
+                <p style="margin-top:24px">Warmly,<br/><strong>The Galoras Team</strong></p>
                 <hr style="border:none;border-top:1px solid #eee;margin:24px 0"/>
                 <p style="color:#999;font-size:12px">© Galoras · galoras.com</p>
               </div>
@@ -175,7 +230,7 @@ Weight the overall_score: pillar_alignment 25%, sport_of_business_fit 25%, profe
     }
 
     return new Response(
-      JSON.stringify({ success: true, overallScore, autoReject }),
+      JSON.stringify({ success: true, overallScore, status: newStatus, autoAccept, autoReject }),
       { status: 200, headers: { "Content-Type": "application/json", ...corsHeaders } }
     );
   } catch (err: any) {
