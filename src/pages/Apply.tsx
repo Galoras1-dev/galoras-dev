@@ -229,6 +229,19 @@ export default function Apply() {
         body: { applicationId },
       }).catch(() => {/* silent — analysis runs in background */});
 
+      // Tell Conor a real coach has applied. Without this, applications sat in
+      // the table unseen. Fire-and-forget: an alert failure must never block
+      // the applicant.
+      supabase.functions.invoke("send-admin-alert", {
+        body: {
+          alertType: "coach_application",
+          name: formData.full_name,
+          email: formData.email,
+          linkedin: normalizeUrl(formData.linkedin_url) || "",
+          headline: formData.current_role || "",
+        },
+      }).catch(() => {/* silent — alert is best-effort */});
+
       toast({
         title: "Application received!",
         description: "Create your account to secure your spot — we'll only charge your card if you're approved.",
