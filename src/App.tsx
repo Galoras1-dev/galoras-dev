@@ -121,7 +121,8 @@ function AppRoutes() {
           <Route path="/coaching" element={<PaymentGate><CoachingDirectory /></PaymentGate>} />
           <Route path="/coaching/matching" element={<PaymentGate><CoachMatching /></PaymentGate>} />
           <Route path="/coaching/compare" element={<PaymentGate><CoachCompare /></PaymentGate>} />
-          <Route path="/coaching/why" element={<WhyCoaching />} />
+          <Route path="/coaching/how-it-works" element={<WhyCoaching />} />
+          <Route path="/coaching/why" element={<Navigate to="/coaching/how-it-works" replace />} />
           <Route path="/coaching/onboarding" element={<CoachOnboarding />} />
           <Route path="/coach/:slug" element={<PaymentGate><CoachProfile /></PaymentGate>} />
           {/* Preview by coach id, for the two people who need to see a profile

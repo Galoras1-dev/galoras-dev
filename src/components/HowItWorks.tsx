@@ -8,7 +8,7 @@ const pillars = [
     body: "A shared view of clarity, fundamentals, and execution under pressure, applied consistently across every coach and programme.",
     accent: false,
     bg: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?q=80&w=800&auto=format&fit=crop",
-    href: "/coaching/why",
+    href: "/coaching/how-it-works",
   },
   {
     number: 2,

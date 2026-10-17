@@ -29,7 +29,8 @@ const navItems = [
     children: [
       { name: "Find a Coach", href: "/coaching", description: "Browse our vetted coaches" },
       // { name: "How Matching Works", href: "/coaching/matching", description: "AI-powered coach matching" }, // hidden — Phase 3, pending sign-off
-      { name: "Why Coaching", href: "/coaching/why", description: "The power of coaching" },
+      { name: "How it works", href: "/coaching/how-it-works", description: "From first session to real progress" },
+      { name: "Become a coach", href: "/apply", description: "Apply to coach on Galoras" },
     ],
   },
   { name: "Enterprise", href: "/enterprise" },
