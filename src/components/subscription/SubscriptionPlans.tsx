@@ -39,10 +39,8 @@ const PLANS: PlanDef[] = [
       "Everything in Pro",
       "Enhanced profile & priority exposure",
       "Exclusive content & resources (coming soon)",
-      "Exclusive content & resources",
       "Webinar & teaching roles",
       "Priority community access",
-      "Sport of Business™ Foundations",
     ],
     highlighted: false,
   },
@@ -58,11 +56,10 @@ const PLANS: PlanDef[] = [
     features: [
       "Everything in Elite",
       "Featured placement & promotion",
-      "Advanced Sport of Business™ cert.",
-      "Eligible for B2B enterprise delivery",
+      "Meta Team accreditation pathway (ICF-accredited)",
+      "Eligible to deliver Galoras Enterprise engagements",
       "Direct leadership access",
       "Published thought leadership",
-      "Enterprise coaching opportunities",
     ],
   },
 ];
@@ -70,11 +67,11 @@ const PLANS: PlanDef[] = [
 const COMPARISON_ROWS = [
   { label: "Profile & Visibility",    pro: "Verified listing",          elite: "Enhanced + priority",         master: "Featured & promoted" },
   { label: "Booking & Payments",      pro: "Full Stripe flow",           elite: "Full Stripe flow",            master: "Full Stripe flow" },
-  { label: "Platform Tools",          pro: "Zoom + AI + action boards",  elite: "Zoom + AI + action boards",   master: "Zoom + AI + action boards" },
+  { label: "Platform Tools",          pro: "Video sessions + AI + action boards",  elite: "Video sessions + AI + action boards",   master: "Video sessions + AI + action boards" },
   { label: "Community",               pro: "Standard access",            elite: "Priority + exclusive",        master: "Direct leadership access" },
-  { label: "Training",                pro: null,                         elite: "Sport of Business™ Foundations", master: "Advanced certification" },
+  { label: "Training",                pro: null,                         elite: null,                          master: "Meta Team accreditation (ICF-accredited)" },
   { label: "Teaching Roles",          pro: null,                         elite: "Webinars & workshops",        master: "Thought leadership & publishing" },
-  { label: "Enterprise Delivery",     pro: null,                         elite: null,                          master: "Deliver Sport of Business™" },
+  { label: "Enterprise Delivery",     pro: null,                         elite: null,                          master: "Galoras Enterprise engagements" },
 ];
 
 export function SubscriptionPlans() {

@@ -97,9 +97,6 @@ export const PILLAR_SPECIALTIES = {
     "Purpose & Direction",
     "Stress & Burnout Management",
   ],
-  "Galoras Signature": [
-    "Sport of Business Coaching™",
-  ],
 } as const;
 
 // Flat list of all pillar specialties

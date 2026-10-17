@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
       .update({ review_status: "under_review" })
       .eq("id", applicationId);
 
-    const prompt = `You are the AI coach evaluator for Galoras, a high-performance coaching marketplace built on the "Sport of Business" philosophy — the belief that business performance requires the same disciplined, expert coaching as elite sport.
+    const prompt = `You are the AI coach evaluator for Galoras, a coaching platform for experienced operators — coaches who have done the work themselves and help clients close the gap between deciding and doing.
 
 Evaluate this coach applicant and return a JSON object only. No markdown, no preamble — raw JSON only.
 
@@ -216,7 +216,7 @@ Weight the overall_score: pillar_alignment 25%, sport_of_business_fit 25%, profe
                 <h2>Thank you, ${app.full_name ?? "Coach"}.</h2>
                 <p>We truly appreciate your interest in joining the Galoras coaching network and the time you invested in your application.</p>
                 <p>After a careful review of your profile, we've determined that your background isn't the right fit for our current roster at this time.</p>
-                <p>Galoras is built on the <strong>Sport of Business</strong> philosophy — we curate coaches who bring an elite, high-performance mindset to every client engagement. We receive many strong applications and can only move forward with those who align most closely with our coaching pillars and quality standards.</p>
+                <p>Galoras curates coaches who bring real operating experience and a high standard to every client engagement. We receive many strong applications and can only move forward with those who align most closely with our coaching pillars and quality standards.</p>
                 <p>We encourage you to continue developing your practice. You are welcome to reapply in six months, and we'd love to see your progress.</p>
                 <p>Thank you again, and we wish you every success in your coaching journey.</p>
                 <p style="margin-top:24px">Warmly,<br/><strong>The Galoras Team</strong></p>

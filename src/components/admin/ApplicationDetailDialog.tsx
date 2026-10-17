@@ -138,7 +138,7 @@ export function ApplicationDetailDialog({ application, open, onOpenChange }: Pro
                     <span className="text-xs font-semibold text-muted-foreground">{pillar}</span>
                     <div className="flex flex-wrap gap-1 mt-0.5">
                       {specs.map((s) => (
-                        <Badge key={s} variant="secondary" className={s.includes("Sport of Business") ? "bg-primary/10 text-primary border-primary/20" : ""}>
+                        <Badge key={s} variant="secondary">
                           {s}
                         </Badge>
                       ))}

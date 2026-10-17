@@ -129,7 +129,7 @@ export default function Contact() {
     <Layout>
       <SEO
         title="Contact Us"
-        description="Start a conversation with Galoras. Whether you're exploring coaching, the Sport of Business programme, or a business consultation, we're ready to help."
+        description="Start a conversation with Galoras. Whether you're exploring coaching, Galoras Enterprise for your teams, or a partnership, we're ready to help."
         canonical="/contact"
       />
       {/* Hero Section */}

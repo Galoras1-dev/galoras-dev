@@ -152,14 +152,14 @@ export default function LabsArticle() {
       <section className="section-padding hero-gradient">
         <div className="container-wide text-center">
           <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">
-            Bring the <span className="text-gradient">Sport of Business</span> to Your Team
+            Bring <span className="text-gradient">Galoras Enterprise</span> to Your Team
           </h2>
           <p className="text-muted-foreground text-lg mb-8 max-w-xl mx-auto">
-            A structured methodology for how leadership teams align, decide, and execute.
+            Strategy alignment and team performance, powered by Meta Team. First engagements from January 2027.
           </p>
-          <Link to="/business/sport-of-business">
+          <Link to="/enterprise">
             <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 glow-primary">
-              Explore the Framework
+              See how it works
               <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
           </Link>

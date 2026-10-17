@@ -38,7 +38,7 @@ export default function CoachAgreement() {
 
           <h2>3. Use of Brand</h2>
           <p>
-            Any Galoras or Sport of Business badges, logos, or marks are licensed to you on a
+            Any Galoras badges, logos, or marks are licensed to you on a
             revocable, non-exclusive basis. They must be used in accordance with Galoras brand
             guidelines. Galoras may revoke usage rights at any time without notice.
           </p>

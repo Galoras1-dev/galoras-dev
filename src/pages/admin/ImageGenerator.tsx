@@ -89,9 +89,9 @@ const IMAGE_CONFIGS = [
     prompt: "Dynamic workshop environment abstract with collaborative energy patterns and interactive elements, representing group learning"
   },
   {
-    pageName: "sport-of-business",
-    title: "Sport of Business Hero",
-    prompt: "Athletic performance abstract with motion trails and peak performance visualization, combining sports dynamics with business excellence"
+    pageName: "enterprise",
+    title: "Enterprise Hero",
+    prompt: "Abstract of a leadership team aligning: converging lines and clear paths, representing strategy turning into execution"
   }
 ];
 

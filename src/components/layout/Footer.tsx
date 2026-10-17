@@ -4,7 +4,9 @@ const galorasLogo = "/galoras-logo.jpg";
 
 const footerLinks = {
   platform: [
-    { name: "Coaching Exchange", href: "/coaching" },
+    { name: "Coaching", href: "/coaching" },
+    { name: "Enterprise", href: "/enterprise" },
+    { name: "Leadership Labs", href: "/labs" },
   ],
   company: [
     { name: "About Us", href: "/about" },

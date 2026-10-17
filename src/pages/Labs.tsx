@@ -16,7 +16,7 @@ export default function Labs() {
     <Layout>
       <SEO
         title="Leadership Labs"
-        description="Leadership Labs is the Galoras content hub: essays on performance, mindset, and leadership from the people building the Sport of Business. Live workshops and events from October 2026."
+        description="Leadership Labs is the Galoras content hub: essays and conversations on performance, mindset, and leadership. Live workshops and events from October 2026."
         canonical="/labs"
       />
 
@@ -32,7 +32,7 @@ export default function Labs() {
               <span className="text-gradient">LEADERSHIP LABS</span>
             </h1>
             <p className="text-lg text-foreground font-medium mb-4 max-w-xl mx-auto">
-              The thinking behind the Sport of Business — essays on performance, mindset, and what actually separates high-performing leaders and teams from the rest.
+              Essays and conversations on performance, mindset, and what actually separates high-performing leaders and teams from the rest.
             </p>
             <p className="text-base text-muted-foreground max-w-xl mx-auto">
               Written by the operators and coaches inside the Galoras network. New pieces published regularly.
@@ -101,7 +101,7 @@ export default function Labs() {
               In-Person &amp; Virtual Labs <span className="text-gradient">from October 2026</span>
             </h2>
             <p className="text-muted-foreground text-lg mb-8 max-w-2xl mx-auto">
-              We're building a calendar of facilitated Leadership Labs — immersive sessions where teams practise the Sport of Business in real time, alongside guest speakers and workshops. Register your interest and we'll let you know when dates open.
+              We're building a calendar of facilitated Leadership Labs — immersive sessions for leadership teams, alongside guest speakers and workshops. Register your interest and we'll let you know when dates open.
             </p>
             <Link to="/contact">
               <Button size="lg" className="bg-primary text-primary-foreground hover:bg-primary/90 glow-primary">

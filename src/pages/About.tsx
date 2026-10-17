@@ -33,7 +33,7 @@ export default function About() {
     <Layout>
       <SEO
         title="About Galoras"
-        description="Galoras is a performance organisation built around one standard. Meet the architect, the advisors, and the master coaches who deliver the Sport of Business."
+        description="Galoras is a performance organisation built around one standard. Meet the founder, the advisors, and the master coaches."
         canonical="/about"
       />
 
@@ -88,13 +88,13 @@ export default function About() {
                 Conor <span className="text-gradient">McGowan Smyth</span>
               </h2>
               <p className="text-zinc-500 text-sm font-semibold uppercase tracking-widest mb-6">
-                Author · The Sport of Business
+                Founder · Galoras
               </p>
               <p className="text-zinc-300 text-base leading-relaxed mb-4">
                 Conor built Galoras from decades of operating experience leading $100M+ revenue organisations across Europe, the Caribbean, Latin America, and the United States — through growth, transformation, and disruption.
               </p>
               <p className="text-zinc-400 text-base leading-relaxed mb-6">
-                The Sport of Business framework emerged from that experience. Conor is its architect — responsible for strategic direction, methodology, and the standard every Galoras coach is held to. He is not an operational or bookable resource.
+                That experience shaped Galoras. Conor is responsible for its strategic direction, its methodology, and the standard every Galoras coach is held to. He is not an operational or bookable resource.
               </p>
               <div className="border-l-2 border-primary/40 pl-4">
                 <p className="text-zinc-400 text-sm italic leading-relaxed">
@@ -146,7 +146,7 @@ export default function About() {
               Master <span className="text-gradient">Coaches</span>
             </h2>
             <p className="text-zinc-400 text-lg max-w-2xl mx-auto">
-              Every Galoras Master Coach has operated at the level they coach. Selected to deliver the Sport of Business framework. Not just accredited — proven.
+              Every Galoras Master Coach has operated at the level they coach. Master Coaches can qualify to deliver Galoras Enterprise engagements through Meta Team’s ICF-accredited pathway. Not just accredited — proven.
             </p>
           </div>
 
@@ -220,7 +220,7 @@ export default function About() {
             One Standard. No <span className="text-gradient">Exceptions.</span>
           </h2>
           <p className="text-zinc-400 text-lg mb-8 max-w-xl mx-auto">
-            If you want to work with a Galoras coach or bring the Sport of Business framework to your organisation, start here.
+            If you want to work with a Galoras coach or bring Galoras Enterprise to your organisation, start here.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link to="/coaching">

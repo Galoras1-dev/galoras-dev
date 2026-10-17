@@ -24,7 +24,7 @@ import { supabase, signOutAndClear } from "@/integrations/supabase/client";
 const navItems = [
   { name: "Home", href: "/" },
   {
-    name: "Coaching Exchange",
+    name: "Coaching",
     href: "/coaching",
     children: [
       { name: "Find a Coach", href: "/coaching", description: "Browse our vetted coaches" },
@@ -32,8 +32,8 @@ const navItems = [
       { name: "Why Coaching", href: "/coaching/why", description: "The power of coaching" },
     ],
   },
+  { name: "Enterprise", href: "/enterprise" },
   { name: "Leadership Labs", href: "/labs" },
-  { name: "Sport of Business", href: "/business/sport-of-business" },
   { name: "About", href: "/about" },
 ];
 

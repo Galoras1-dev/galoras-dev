@@ -37,7 +37,7 @@ import CoachSignup from "./pages/CoachSignup";
 // Labs & Business
 import Labs from "./pages/Labs";
 import LabsArticle from "./pages/LabsArticle";
-import SportOfBusiness from "./pages/business/SportOfBusiness";
+import Enterprise from "./pages/business/Enterprise";
 
 // Admin
 import ImageGenerator from "./pages/admin/ImageGenerator";
@@ -137,7 +137,9 @@ function AppRoutes() {
           {/* Labs & Business Routes */}
           <Route path="/labs" element={<Labs />} />
           <Route path="/labs/:slug" element={<LabsArticle />} />
-          <Route path="/business/sport-of-business" element={<SportOfBusiness />} />
+          <Route path="/enterprise" element={<Enterprise />} />
+          {/* Old business URL kept as a redirect so existing links still land */}
+          <Route path="/business/sport-of-business" element={<Navigate to="/enterprise" replace />} />
 
           {/* Core Routes */}
           <Route path="/apply" element={<Apply />} />
