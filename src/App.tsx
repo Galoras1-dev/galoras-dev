@@ -39,6 +39,8 @@ import Labs from "./pages/Labs";
 import LabsArticle from "./pages/LabsArticle";
 import LabsWatch from "./pages/LabsWatch";
 import Enterprise from "./pages/business/Enterprise";
+import ForYou from "./pages/coaching/ForYou";
+import IsCoachingForMe from "./pages/coaching/IsCoachingForMe";
 import Payments from "./pages/legal/Payments";
 
 // Admin
@@ -124,6 +126,8 @@ function AppRoutes() {
           <Route path="/coaching/matching" element={<PaymentGate><CoachMatching /></PaymentGate>} />
           <Route path="/coaching/compare" element={<PaymentGate><CoachCompare /></PaymentGate>} />
           <Route path="/coaching/how-it-works" element={<WhyCoaching />} />
+          <Route path="/coaching/for-you" element={<ForYou />} />
+          <Route path="/coaching/is-coaching-for-me" element={<IsCoachingForMe />} />
           <Route path="/coaching/why" element={<Navigate to="/coaching/how-it-works" replace />} />
           <Route path="/coaching/onboarding" element={<CoachOnboarding />} />
           <Route path="/coach/:slug" element={<PaymentGate><CoachProfile /></PaymentGate>} />

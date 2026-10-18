@@ -29,7 +29,9 @@ const navItems = [
     children: [
       { name: "Find a Coach", href: "/coaching", description: "Browse our vetted coaches" },
       // { name: "How Matching Works", href: "/coaching/matching", description: "AI-powered coach matching" }, // hidden — Phase 3, pending sign-off
+      { name: "Is coaching for me?", href: "/coaching/is-coaching-for-me", description: "What drives you, and what holds you back" },
       { name: "How it works", href: "/coaching/how-it-works", description: "From first session to real progress" },
+      { name: "Early access", href: "/coaching/for-you", description: "Plans and early access for January 2027" },
       { name: "Become a coach", href: "/apply", description: "Apply to coach on Galoras" },
     ],
   },

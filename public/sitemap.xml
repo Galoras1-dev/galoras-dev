@@ -16,6 +16,16 @@
     <priority>0.9</priority>
   </url>
   <url>
+    <loc>https://galoras.com/coaching/for-you</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://galoras.com/coaching/is-coaching-for-me</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
     <loc>https://galoras.com/coaching/how-it-works</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
