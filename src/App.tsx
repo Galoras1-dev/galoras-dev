@@ -39,6 +39,7 @@ import Labs from "./pages/Labs";
 import LabsArticle from "./pages/LabsArticle";
 import LabsWatch from "./pages/LabsWatch";
 import Enterprise from "./pages/business/Enterprise";
+import Payments from "./pages/legal/Payments";
 
 // Admin
 import ImageGenerator from "./pages/admin/ImageGenerator";
@@ -141,6 +142,8 @@ function AppRoutes() {
           <Route path="/labs/watch/:slug" element={<LabsWatch />} />
           <Route path="/labs/:slug" element={<LabsArticle />} />
           <Route path="/enterprise" element={<Enterprise />} />
+          <Route path="/legal/payments" element={<Payments />} />
+          <Route path="/cookies" element={<CookiePolicy />} />
           {/* Old business URL kept as a redirect so existing links still land */}
           <Route path="/business/sport-of-business" element={<Navigate to="/enterprise" replace />} />
 

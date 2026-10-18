@@ -11,25 +11,22 @@ const footerLinks = {
   company: [
     { name: "About Us", href: "/about" },
     { name: "Apply to Coach", href: "/apply" },
-    { name: "Careers", href: "/careers" },
     { name: "Contact", href: "/contact" },
   ],
   resources: [
-    { name: "FAQ", href: "/faq" },
+    { name: "How coaching works", href: "/coaching/how-it-works" },
   ],
   legal: [
     { name: "Terms of Service", href: "/terms" },
     { name: "Privacy Policy", href: "/privacy" },
     { name: "Payments & Refunds", href: "/legal/payments" },
-    { name: "Coach Agreement", href: "/legal/coach-agreement" },
+    { name: "Coach Agreement", href: "/coach-agreement" },
     { name: "Cookie Policy", href: "/cookies" },
   ],
 };
 
 const socialLinks = [
   { name: "LinkedIn", icon: Linkedin, href: "https://linkedin.com/company/galoras" },
-  { name: "Twitter", icon: Twitter, href: "https://twitter.com/galoras" },
-  { name: "Instagram", icon: Instagram, href: "https://instagram.com/galoras" },
   // hello@ is not a mailbox. Every click on this icon bounced.
   { name: "Email", icon: Mail, href: "mailto:conor@galoras.com" },
 ];

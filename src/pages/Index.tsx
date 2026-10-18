@@ -8,12 +8,37 @@ import { SEO } from "@/components/SEO";
 import { PreLaunchNotice } from "@/components/PreLaunchNotice";
 import { EarlyAccess } from "@/components/EarlyAccess";
 import { ArrowRight } from "lucide-react";
+import { labsArticles } from "@/data/labsArticles";
+
+const OFFERS = [
+  {
+    tag: "For you",
+    name: "Galoras Coaching",
+    body: "A coach who has done the job, and sessions that turn into action between meetings.",
+    href: "/coaching",
+    cta: "Find a coach",
+  },
+  {
+    tag: "For your leadership team",
+    name: "Galoras Enterprise",
+    body: "Strategy alignment and team performance, powered by Meta Team. We find what’s slowing execution, remove it, and measure the change.",
+    href: "/enterprise",
+    cta: "See how it works",
+  },
+  {
+    tag: "For everyone",
+    name: "Leadership Labs",
+    body: "Conversations with leaders, operators and athletes who have performed under real pressure.",
+    href: "/labs",
+    cta: "Explore Labs",
+  },
+];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// The homepage — built to the Galoras message house (Strategy V2, slide 14).
+// The homepage — built to the Galoras Message House v4 (17 Oct 2026).
 //
-//   BRAND    Do More. Do It Now.
-//   CORE     AI that enables human connection
+//   CORE     Close the gap between deciding and doing.
+//   OFFERS   Galoras Coaching · Galoras Enterprise (powered by Meta Team) · Leadership Labs
 //   COACH    Get work. Do the work. Run the work.
 //   COACHEE  Find the human. Do the work together. Keep moving between sessions.
 //
@@ -146,8 +171,8 @@ export default function Index() {
   return (
     <Layout>
       <SEO
-        title="AI that enables human connection"
-        description="Galoras is a coaching platform built around the relationship between a coach and the person they coach. Find the human, do the work together, keep moving between sessions. Opening January 2027."
+        title="Close the gap between deciding and doing"
+        description="Galoras helps leaders and their teams do what they decided to do: coaches who have done the job, Galoras Enterprise for leadership teams (powered by Meta Team), and Leadership Labs. Opening January 2027."
         canonical="/"
       />
       <FounderVideoModal />
@@ -167,12 +192,12 @@ export default function Index() {
               </p>
 
               <h1 className="font-display text-5xl font-extrabold leading-[1.05] text-foreground sm:text-6xl lg:text-7xl">
-                Do More.<br />
-                <span className="text-gradient">Do It Now.</span>
+                Close the gap between{" "}
+                <span className="text-gradient">deciding and doing.</span>
               </h1>
 
               <p className="mt-7 max-w-xl font-display text-2xl font-bold leading-snug text-foreground">
-                AI that enables human connection.
+                Coaching for you. Performance for your team.
               </p>
 
               {/* The mechanism, in Conor's own words rather than as an
@@ -188,6 +213,13 @@ export default function Index() {
 
               <p className="mt-5 max-w-xl text-base leading-relaxed text-foreground">
                 The coaching is human. The technology is what makes it continue.
+              </p>
+
+              <p className="mt-3 max-w-xl text-sm text-muted-foreground">
+                Leading a team that can see the strategy but can’t execute it?{" "}
+                <Link to="/enterprise" className="font-semibold text-primary underline-offset-4 hover:underline">
+                  Galoras Enterprise →
+                </Link>
               </p>
 
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
@@ -217,6 +249,34 @@ export default function Index() {
         </div>
       </section>
 
+      {/* ── Three doorways ── one story, three offers (Message House v4) ── */}
+      <section className="section-padding border-t border-border bg-background">
+        <div className="container-wide">
+          <div className="mx-auto mb-12 max-w-2xl text-center">
+            <h2 className="font-display text-3xl font-bold md:text-4xl">
+              One problem. <span className="text-gradient">Three ways in.</span>
+            </h2>
+            <p className="mt-4 text-muted-foreground">
+              People leave a good session and don’t act on it. Teams agree a strategy and don’t execute it. Galoras works on both.
+            </p>
+          </div>
+          <div className="grid gap-6 md:grid-cols-3">
+            {OFFERS.map((o) => (
+              <Link
+                key={o.name}
+                to={o.href}
+                className="group flex flex-col gap-3 rounded-3xl border border-border bg-card p-8 transition-colors hover:border-primary/60"
+              >
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">{o.tag}</p>
+                <h3 className="font-display text-2xl font-bold text-foreground">{o.name}</h3>
+                <p className="flex-1 text-sm leading-relaxed text-muted-foreground">{o.body}</p>
+                <span className="text-sm font-semibold text-primary group-hover:underline underline-offset-4">{o.cta} →</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── The two journeys ─────────────────────────────────────────────────
           Slides 10 and 11. A visitor should recognise which of the two they are
           within a second, and not have to read the other one. */}
@@ -224,7 +284,7 @@ export default function Index() {
         <div className="container-wide">
           <div className="mx-auto mb-14 max-w-2xl text-center">
             <h2 className="font-display text-3xl font-bold md:text-4xl">
-              Two sides of the same{" "}
+              Galoras Coaching: two sides of the same{" "}
               <span className="text-gradient">relationship</span>
             </h2>
           </div>
@@ -246,6 +306,58 @@ export default function Index() {
 
       {/* Real published coaches. Renders nothing while there are none. */}
       <FeaturedCoaches />
+
+      {/* ── Galoras Enterprise ── */}
+      <section className="section-padding border-y border-border bg-zinc-950">
+        <div className="container-wide grid items-center gap-10 lg:grid-cols-[1.4fr_1fr]">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-widest text-primary">Galoras Enterprise · powered by Meta Team</p>
+            <h2 className="mt-4 font-display text-3xl font-bold text-white md:text-4xl">
+              Your team can see the strategy. It can’t execute it yet.
+            </h2>
+            <p className="mt-5 max-w-2xl text-lg leading-relaxed text-zinc-300">
+              In one week we show your leadership team what’s in the way. Over six months we remove it, and we measure the change. First engagements start in January 2027.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row lg:flex-col lg:items-start">
+            <Button asChild size="lg" className="h-14 bg-primary px-8 text-base font-semibold text-primary-foreground hover:bg-primary/90">
+              <Link to="/enterprise#book">
+                Book a conversation
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+            </Button>
+            <Link to="/enterprise" className="text-sm font-semibold text-primary underline-offset-4 hover:underline">
+              How it works →
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Leadership Labs: latest piece ── */}
+      {labsArticles.length > 0 && (
+        <section className="section-padding bg-background">
+          <div className="container-wide grid items-center gap-10 lg:grid-cols-[1fr_1.2fr]">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-primary">Leadership Labs</p>
+              <h2 className="mt-4 font-display text-3xl font-bold md:text-4xl">
+                Conversations with people who have performed under real pressure.
+              </h2>
+              <Link to="/labs" className="mt-6 inline-block text-sm font-semibold text-primary underline-offset-4 hover:underline">
+                Explore Leadership Labs →
+              </Link>
+            </div>
+            <Link
+              to={`/labs/${labsArticles[0].slug}`}
+              className="group rounded-3xl border border-border bg-card p-8 transition-colors hover:border-primary/60"
+            >
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Latest · {labsArticles[0].displayDate}</p>
+              <h3 className="mt-3 font-display text-2xl font-bold text-foreground group-hover:text-primary">{labsArticles[0].title}</h3>
+              <p className="mt-3 text-muted-foreground">{labsArticles[0].excerpt}</p>
+              <p className="mt-5 text-sm text-muted-foreground">{labsArticles[0].author} · {labsArticles[0].readingTime}</p>
+            </Link>
+          </div>
+        </section>
+      )}
 
       {/* ── Close ──────────────────────────────────────────────────────────
           ONE call to action, and it is a different one from the hero.
