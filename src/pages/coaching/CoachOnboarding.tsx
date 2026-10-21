@@ -21,6 +21,7 @@ import { useProductTypes } from "@/hooks/useProductTypes";
 import { CoachTierPayment } from "@/components/coaching/CoachTierPayment";
 import { ProfilePreviewCard } from "@/components/coaching/ProfilePreviewCard";
 import { COACH_TIERS } from "@/data/coachTiers";
+import { isDocx, docxToPdf } from "@/lib/docxToPdf";
 
 const storageKey = (uid: string) => `galoras_coach_onboarding_${uid}`;
 
@@ -71,7 +72,7 @@ const TIER_OPTIONS = COACH_TIERS.map(t => ({
   name: t.name,
   price: `${t.list}/month`,
   founding: t.founding,
-  features: t.headlineFeatures,
+  features: t.features,
   badge: t.highlight ? "Most Popular" : undefined,
   comingSoon: false,
 }));
@@ -391,7 +392,10 @@ export default function CoachOnboarding() {
         return false;
       }
       if (!docFile) {
-        toast({ title: "Upload one PDF \u2014 a resume, biography, or your LinkedIn profile", variant: "destructive" }); return false;
+        toast({ title: "Upload one document \u2014 a resume, biography, or your LinkedIn profile (PDF or Word)", variant: "destructive" }); return false;
+      }
+      if (!(isDocx(docFile) || docFile.type === "application/pdf" || /\.pdf$/i.test(docFile.name))) {
+        toast({ title: "Please upload a PDF or a Word .docx file", description: "Older .doc files: open in Word and Save As .docx or PDF.", variant: "destructive" }); return false;
       }
       if (!photoFile) {
         toast({ title: "Add a photo", variant: "destructive" }); return false;
@@ -499,7 +503,10 @@ export default function CoachOnboarding() {
         const { data: sessionData } = await supabase.auth.getSession();
         const who = sessionData?.session?.user?.id || userId || "anon";
 
-        const documentBase64 = await fileToBase64(docFile!);
+        // Word resumes are turned into a text PDF here, so the generator, which
+        // reads PDFs, gets the same thing either way.
+        const docForAi = isDocx(docFile!) ? await docxToPdf(docFile!) : docFile!;
+        const documentBase64 = await fileToBase64(docForAi);
         const avatarUrl = photoFile ? await uploadPhoto(photoFile, who) : null;
 
         const { data, error } = await supabase.functions.invoke("generate-coach-profile", {
@@ -509,7 +516,7 @@ export default function CoachOnboarding() {
             fullName: fullName.trim(),
             avatarUrl,
             documentBase64,
-            documentMediaType: docFile!.type || "application/pdf",
+            documentMediaType: docForAi.type || "application/pdf",
             answers: {
               practice: qPractice.trim(),
               audience: qAudience.trim(),
@@ -945,14 +952,14 @@ export default function CoachOnboarding() {
                       <div className="space-y-2">
                         <Label className="text-zinc-300 text-sm font-medium">Your document *</Label>
                         <p className="text-xs text-zinc-500 leading-relaxed">
-                          One PDF — your resume, a biography, or your LinkedIn profile saved
-                          as PDF (on LinkedIn: More → Save to PDF). We read it for your career
-                          history so you don't have to retype it above.
+                          One document, as a PDF or Word (.docx): your resume, a biography, or
+                          your LinkedIn profile saved as PDF (on LinkedIn: More → Save to PDF).
+                          We read it for your career history so you don't have to retype it above.
                         </p>
                         <Input
                           id="docFile"
                           type="file"
-                          accept="application/pdf"
+                          accept="application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx"
                           onChange={e => setDocFile(e.target.files?.[0] ?? null)}
                           className="bg-zinc-800 border-zinc-700 text-white h-11 text-base file:text-zinc-300 file:bg-zinc-700 file:border-0 file:rounded file:px-3 file:py-1 file:mr-3"
                         />

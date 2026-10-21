@@ -19,6 +19,8 @@ type FitDimensions = {
   dimensions?: {
     pillar_alignment?: FitDimension;
     professional_credibility?: FitDimension;
+    operator_fit?: FitDimension;
+    /** Old name for operator_fit, on applications scored before 21 Oct 2026. */
     sport_of_business_fit?: FitDimension;
     communication_quality?: FitDimension;
     market_positioning?: FitDimension;
@@ -112,10 +114,17 @@ function Badge({ status }: { status: string }) {
   );
 }
 
+// Applications scored before 21 Oct carry "sport_of_business_fit" instead of
+// "operator_fit". Same slot, old name; read either.
+const dimOf = (dims: FitDimensions["dimensions"] | undefined, key: string): FitDimension | undefined => {
+  const d = dims as Record<string, FitDimension | undefined> | undefined;
+  return d?.[key] ?? (key === "operator_fit" ? d?.sport_of_business_fit : undefined);
+};
+
 const RADAR_DIMS = [
   { key: "pillar_alignment",        label: "Pillar Align" },
   { key: "professional_credibility",label: "Credibility" },
-  { key: "sport_of_business_fit",   label: "Sport of Biz" },
+  { key: "operator_fit",            label: "Operator fit" },
   { key: "communication_quality",   label: "Communication" },
   { key: "market_positioning",      label: "Positioning" },
   { key: "growth_potential",        label: "Growth" },
@@ -446,7 +455,7 @@ export default function Applicants() {
   // Radar data
   const radarData = RADAR_DIMS.map(({ key, label }) => ({
     subject: label,
-    value: selected?.fit_score_dimensions?.dimensions?.[key]?.score ?? Math.round((selected?.fit_score ?? 0) * 0.17),
+    value: dimOf(selected?.fit_score_dimensions?.dimensions, key)?.score ?? Math.round((selected?.fit_score ?? 0) * 0.17),
     fullMark: 100,
   }));
 
@@ -663,7 +672,7 @@ export default function Applicants() {
                     {/* Dimension list */}
                     <div className="mt-3 space-y-1.5 border-t border-[#1e3a5f] pt-3">
                       {RADAR_DIMS.map(({ key, label }) => {
-                        const dim = selected.fit_score_dimensions?.dimensions?.[key];
+                        const dim = dimOf(selected.fit_score_dimensions?.dimensions, key);
                         const score = dim?.score ?? Math.round(fitScore * 0.17);
                         return (
                           <div key={key} className="flex items-start gap-2 text-xs">
