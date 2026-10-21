@@ -7,6 +7,7 @@ const footerLinks = {
     { name: "Coaching", href: "/coaching" },
     { name: "Enterprise", href: "/enterprise" },
     { name: "Leadership Labs", href: "/labs" },
+    { name: "Pricing", href: "/pricing" },
   ],
   company: [
     { name: "About Us", href: "/about" },
@@ -43,7 +44,7 @@ export function Footer() {
               <img src={galorasLogo} alt="Galoras" className="h-12 w-auto" />
             </Link>
             <p className="text-zinc-100 text-sm leading-relaxed mb-6 max-w-sm">
-              Galoras is a performance-led coaching exchange designed to identify and deploy real execution capability for individuals and organizations operating under pressure.
+              Close the gap between deciding and doing. Coaching for you, with coaches who have done the job. Performance for your team, with Galoras Enterprise.
             </p>
             {/* Social Links */}
             <div className="flex items-center gap-4">
@@ -147,7 +148,7 @@ export function Footer() {
             </p>
             <div className="flex items-center gap-2 text-sm text-zinc-100">
               <Zap className="h-4 w-4 text-primary" />
-              <span>Powered by elite performance</span>
+              <span>Public launch January 2027</span>
             </div>
           </div>
         </div>
