@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { AdminLayout } from "@/components/AdminLayout";
+import { ProfilePreviewCard } from "@/components/coaching/ProfilePreviewCard";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -252,6 +253,20 @@ export default function Applicants() {
           .from("coaches").select("id")
           .eq("email", selected.email).limit(1).maybeSingle();
         found = data?.id ?? null;
+      }
+      // An application made at /apply often has no user_id, and the coaches
+      // row may not carry the email. The account is linked through
+      // coach_registrations (the same route saveDraft uses), so try that too.
+      if (!found && selected.email) {
+        const { data: reg } = await supabase
+          .from("coach_registrations").select("user_id")
+          .eq("email", selected.email).limit(1).maybeSingle();
+        if (reg?.user_id) {
+          const { data } = await supabase
+            .from("coaches").select("id")
+            .eq("user_id", reg.user_id).limit(1).maybeSingle();
+          found = data?.id ?? null;
+        }
       }
       if (!cancelled) setPreviewCoachId(found);
     })();
@@ -588,6 +603,20 @@ export default function Applicants() {
               {/* CENTER: Radar + AI + score */}
               {selected ? (
                 <div className="space-y-4">
+
+                  {/* The profile first, then the score. An approver reads what
+                      will publish before looking at how the AI rated it. */}
+                  {previewCoachId ? (
+                    <ProfilePreviewCard
+                      coachId={previewCoachId}
+                      title="Their page, as visitors will see it"
+                      tone="admin"
+                    />
+                  ) : (
+                    <div className="rounded-xl border border-[#1e3a5f] bg-[#0d1f35] p-4 text-sm text-slate-400">
+                      No drafted profile found for this applicant yet. They may not have finished onboarding.
+                    </div>
+                  )}
 
                   {/* Fit Score card */}
                   <div className="rounded-xl border border-[#1e3a5f] bg-[#0d1f35] p-5">

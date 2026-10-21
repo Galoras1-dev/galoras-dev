@@ -162,7 +162,7 @@ export default function CoachSignup() {
 
       toast({
         title: "Account created!",
-        description: "Now choose your coach tier and secure your spot.",
+        description: "Next: a few questions and we draft your profile.",
       });
       navigate("/coaching/onboarding");
     } catch (err: any) {

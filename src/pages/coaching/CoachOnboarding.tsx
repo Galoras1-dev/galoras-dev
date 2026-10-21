@@ -19,6 +19,8 @@ import { Loader2, CheckCircle, AlertCircle, Check } from "lucide-react";
 import { useTags } from "@/hooks/useTags";
 import { useProductTypes } from "@/hooks/useProductTypes";
 import { CoachTierPayment } from "@/components/coaching/CoachTierPayment";
+import { ProfilePreviewCard } from "@/components/coaching/ProfilePreviewCard";
+import { COACH_TIERS } from "@/data/coachTiers";
 
 const storageKey = (uid: string) => `galoras_coach_onboarding_${uid}`;
 
@@ -62,11 +64,17 @@ function clearInviteStorage() {
   } catch { /* nothing to clear */ }
 }
 
-const TIER_OPTIONS = [
-  { key: "pro" as const,    name: "Pro",    price: "$49/month",  desc: "Entry-level visibility. Get listed and start booking.",                                         comingSoon: false },
-  { key: "elite" as const,  name: "Elite",  price: "$99/month",  desc: "Priority exposure, enhanced profile visibility, and exclusive platform access.", badge: "Most Popular", comingSoon: false },
-  { key: "master" as const, name: "Master", price: "$197/month", desc: "Featured placement. Enterprise delivery. We back you.",                                        comingSoon: false },
-];
+// The tier step reads the same plan data as the Pricing page (src/data/coachTiers.ts),
+// so the two can't drift apart again.
+const TIER_OPTIONS = COACH_TIERS.map(t => ({
+  key: t.key,
+  name: t.name,
+  price: `${t.list}/month`,
+  founding: t.founding,
+  features: t.headlineFeatures,
+  badge: t.highlight ? "Most Popular" : undefined,
+  comingSoon: false,
+}));
 
 // ── Tag pill component ────────────────────────────────────────────────────────
 function TagPills({ family, selected, onChange, single = false }: {
@@ -203,6 +211,21 @@ export default function CoachOnboarding() {
   }, [generating]);
   const [generated, setGenerated] = useState<Record<string, any> | null>(null);
 
+  // The preview needs the id of the coaches row the generator created. If the
+  // generator didn't hand it back, or the page was reloaded, find it by the
+  // signed-in user rather than silently showing no preview (21 Oct test).
+  useEffect(() => {
+    if (coachRowId || !userId || step < 5) return;
+    let cancelled = false;
+    supabase
+      .from("coaches").select("id")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1).maybeSingle()
+      .then(({ data }) => { if (!cancelled && data?.id) setCoachRowId(data.id); });
+    return () => { cancelled = true; };
+  }, [coachRowId, userId, step]);
+
   // Step 2 — tag keys
   const [specialtyTags, setSpecialtyTags] = useState<string[]>([]);
   const [audienceTags, setAudienceTags] = useState<string[]>([]);
@@ -257,6 +280,8 @@ export default function CoachOnboarding() {
     setEnterpriseTags(fd.enterpriseTags ?? []);
     setCredentialTags(fd.credentialTags ?? []);
     if (fd.pendingProduct) setPendingProduct(fd.pendingProduct);
+    if (fd.generated) setGenerated(fd.generated);
+    if (fd.coachRowId) setCoachRowId(fd.coachRowId);
     setStep(saved.step);
     return true;
   };
@@ -428,6 +453,8 @@ export default function CoachOnboarding() {
           fullName, bio, currentRole, linkedinUrl, bookingUrl,
           specialtyTags, audienceTags, styleTags, industryTags,
           availabilityTag, enterpriseTags, credentialTags, pendingProduct,
+          // Kept so a refresh doesn't lose the drafted profile or the preview link.
+          generated, coachRowId,
         },
       }));
     } catch { /* private mode or quota — proceed without a draft */ }
@@ -588,8 +615,26 @@ export default function CoachOnboarding() {
           console.warn("Duplicate application rows still on file:", saved.duplicates);
         }
 
+        // The edits the coach made to the drafted text (headline, positioning,
+        // how you work, philosophy, style) were never sent anywhere: only bio
+        // travels in the body above. Write them to the coach's own row so the
+        // preview on the next step shows what they actually approved.
+        // Unverified against production RLS on 21 Oct: if the write is refused
+        // it is logged, not fatal, and the preview shows the original draft.
+        if (generated && coachRowId) {
+          const { error: textErr } = await supabase.from("coaches").update({
+            headline: generated.headline ?? null,
+            positioning_statement: generated.positioning_statement ?? null,
+            methodology: generated.methodology ?? null,
+            coaching_philosophy: generated.coaching_philosophy ?? null,
+            coaching_style: generated.coaching_style ?? null,
+            bio: (generated.bio ?? bio.trim()) || null,
+          }).eq("id", coachRowId);
+          if (textErr) console.error("Saving edited profile text failed:", textErr);
+        }
+
         persistProgress(6);
-        toast({ title: "Profile saved!", description: "Now choose your coach tier." });
+        toast({ title: "Profile saved", description: "Check your page, then choose your plan." });
         setState("form");
         setStep(6);
       }
@@ -1270,13 +1315,30 @@ export default function CoachOnboarding() {
                           their profile published. Coaches are free until January,
                           so there is nothing to collect. The choice is recorded;
                           a card is asked for after publication, if at all. */}
+                      {/* The coach reads their page before choosing a plan or
+                          submitting. They are signing off on what publishes. */}
+                      {coachRowId ? (
+                        <ProfilePreviewCard
+                          coachId={coachRowId}
+                          title="Your page, as visitors will see it"
+                        />
+                      ) : (
+                        <p className="text-sm text-zinc-500">
+                          Your page preview is still being prepared. You can submit now and
+                          we'll send it to you before anything is published.
+                        </p>
+                      )}
                       <div className="rounded-lg border border-emerald-900/60 bg-emerald-950/30 p-4">
                         <p className="text-sm text-emerald-300 font-medium">
-                          Free for founding coaches
+                          Free for founding coaches until 31 December 2026
                         </p>
                         <p className="text-sm text-zinc-400 mt-1">
-                          No card, no charge. Pick the tier you want and we will sort
-                          billing out with you later.
+                          No card, no charge. We're testing through to January, so there are no
+                          live bookings yet. From January, founding coaches keep 30% off their
+                          plan for 12 months.{" "}
+                          <a href="/pricing" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                            Compare plans
+                          </a>
                         </p>
                       </div>
                       <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-3"} gap-4`}>
@@ -1302,7 +1364,15 @@ export default function CoachOnboarding() {
                             )}
                             <p className={`font-bold text-lg mt-1 ${tier.comingSoon ? "text-zinc-400" : "text-white"}`}>{tier.name}</p>
                             <p className={`font-semibold text-base mt-0.5 ${tier.comingSoon ? "text-zinc-500" : "text-primary"}`}>{tier.price}</p>
-                            <p className={`text-sm mt-2 leading-relaxed ${tier.comingSoon ? "text-zinc-600" : "text-zinc-400"}`}>{tier.desc}</p>
+                            <p className="text-xs text-emerald-300 mt-1">Founding: free to 31 Dec, then {tier.founding}/month for 12 months</p>
+                            <ul className="mt-3 space-y-1.5">
+                              {tier.features.map(f => (
+                                <li key={f} className="flex gap-2 text-sm text-zinc-400 leading-snug">
+                                  <Check className="h-4 w-4 shrink-0 text-primary mt-0.5" aria-hidden="true" />
+                                  {f}
+                                </li>
+                              ))}
+                            </ul>
                             <div className={`mt-4 w-full py-2 rounded-lg text-center text-sm font-semibold transition-colors ${
                               tier.comingSoon
                                 ? "bg-zinc-800/60 text-zinc-600 border border-zinc-700/50"

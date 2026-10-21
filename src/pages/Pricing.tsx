@@ -3,64 +3,13 @@ import { Layout } from "@/components/layout";
 import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, Check } from "lucide-react";
+import { COACH_TIERS } from "@/data/coachTiers";
 
 // Pricing (rebuilt 20 Oct 2026 from Pricing and Packaging v1.1, signed off 20 Oct).
 // No checkout on this page: founding coaches are free to 31 Dec 2026 and no card is taken.
 // Features describe the January 2027 product; anything later is labelled. Enterprise pricing is never published.
 
-type Tier = {
-  name: string;
-  list: string;
-  founding: string;
-  forWho: string;
-  highlight?: boolean;
-  features: string[];
-};
-
-const TIERS: Tier[] = [
-  {
-    name: "Pro",
-    list: "$49",
-    founding: "$34",
-    forWho: "Coaches building a practice",
-    features: [
-      "A profile written by AI from five questions and your CV",
-      "Matched to clients on what they want to change, with the reasons shown",
-      "Booking, payments and video sessions on Galoras",
-      "Each session turned into actions your client confirms",
-      "A brief before every session: goals, actions and what's moving",
-      "A check-in for your client between sessions",
-    ],
-  },
-  {
-    name: "Elite",
-    list: "$99",
-    founding: "$69",
-    forWho: "Established coaches who want to grow",
-    highlight: true,
-    features: [
-      "Everything in Pro",
-      "An intro video on your profile",
-      "Priority when Galoras introduces new clients",
-      "Apply to write for or appear in Leadership Labs",
-      "Send a plan or exercise to many clients at once (during 2027)",
-    ],
-  },
-  {
-    name: "Master",
-    list: "$197",
-    founding: "$138",
-    forWho: "Senior coaches and operators who want enterprise work",
-    features: [
-      "Everything in Elite",
-      "First priority for Galoras introductions",
-      "Featured on the homepage and in Leadership Labs",
-      "Meta Team accreditation pathway (ICF-accredited; course fee applies)",
-      "Eligible to deliver Galoras Enterprise engagements",
-      "A named support contact",
-    ],
-  },
-];
+const TIERS = COACH_TIERS;
 
 export default function Pricing() {
   return (
