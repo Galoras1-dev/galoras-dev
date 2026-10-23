@@ -123,6 +123,7 @@ export default function CoachOnboarding() {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const toastFn = toast;
 
   // Desktop layout at 900px+ (wider than useIsMobile's 768px to account for split-screen)
   const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 900);
@@ -166,6 +167,9 @@ export default function CoachOnboarding() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState("");
+  // Shown above the buttons as well as in a toast, so a missing field is never
+  // a silent "Continue does nothing" (23 Oct test).
+  const [stepError, setStepError] = useState("");
   // The coaches row the generator created. Needed to build the preview link.
   const [coachRowId, setCoachRowId] = useState<string | null>(null);
 
@@ -378,6 +382,12 @@ export default function CoachOnboarding() {
 
   // ── Validation per step ──────────────────────────────────────────────────────
   const validateStep = (): boolean => {
+    // Every validation message below also lands on the page, next to the button.
+    const toast = (opts: { title: string; description?: string; variant?: "destructive" }) => {
+      setStepError([opts.title, opts.description].filter(Boolean).join(": "));
+      toastFn(opts);
+    };
+    setStepError("");
     if (step === 1) {
       if (!fullName.trim()) {
         toast({ title: "Full name is required", variant: "destructive" }); return false;
@@ -530,7 +540,14 @@ export default function CoachOnboarding() {
         // supabase.functions.invoke RESOLVES on a non-2xx rather than throwing,
         // so the error has to be read off the result. Missing this is what let
         // analyze-coach-application fail silently for months.
-        if (error) throw new Error(error.message || "Generation failed");
+        if (error) {
+          // The client only says "non-2xx status code". Read the server's own
+          // message for the console, and keep the coach-facing text plain.
+          let detail = error.message;
+          try { const body = await (error as any).context?.json?.(); if (body?.error) detail = body.error; } catch { /* no body */ }
+          console.error("generate-coach-profile failed:", detail);
+          throw new Error("server");
+        }
         if (!data?.ok) throw new Error(data?.error || "Generation returned nothing");
 
         setGenerated(data.generated);
@@ -539,7 +556,9 @@ export default function CoachOnboarding() {
         if (data.generated?.bio) setBio(data.generated.bio);
       } catch (e: any) {
         setGenError(
-          `We couldn't draft your profile: ${e?.message || e}. Your answers are saved \u2014 try Continue again, and if it keeps failing, contact us and we'll write it by hand.`
+          e?.message === "server" || /non-2xx|Edge Function/i.test(String(e?.message))
+            ? "We couldn't draft your profile just now. Your answers are saved \u2014 try Continue again in a minute, and if it keeps failing, contact us and we'll write it by hand."
+            : `We couldn't draft your profile: ${e?.message || e}. Your answers are saved \u2014 try Continue again, and if it keeps failing, contact us and we'll write it by hand.`
         );
         setGenerating(false);
         return;
@@ -965,7 +984,9 @@ export default function CoachOnboarding() {
                         />
                         {docFile && (
                           <p className="text-xs text-emerald-400">
-                            {docFile.name} — {(docFile.size / 1024 / 1024).toFixed(1)} MB
+                            {docFile.name} — {docFile.size < 1024 * 1024
+                              ? `${Math.max(1, Math.round(docFile.size / 1024))} KB`
+                              : `${(docFile.size / 1024 / 1024).toFixed(1)} MB`}
                           </p>
                         )}
                       </div>
@@ -1399,11 +1420,17 @@ export default function CoachOnboarding() {
                     </>
                   )}
 
+                  {stepError && (
+                    <p role="alert" className="rounded-lg border border-red-900/60 bg-red-950/30 px-3 py-2 text-sm text-red-300">
+                      {stepError}
+                    </p>
+                  )}
+
                   {/* ── Navigation ── */}
                   <div className="flex gap-3 pt-4 border-t border-zinc-800">
                     {step > 1 && step < 6 && (
                       <Button type="button" variant="outline"
-                        onClick={() => setStep(s => s - 1)}
+                        onClick={() => { setStepError(""); setStep(s => s - 1); }}
                         className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white px-6">
                         ← Back
                       </Button>
