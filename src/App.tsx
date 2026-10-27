@@ -3,63 +3,92 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState, type ComponentType } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { usePageTracker } from "@/hooks/usePageTracker";
 
+// Loaded up front: the home page, login, and the two dashboards. Every other
+// page is its own file, downloaded the first time someone opens it, so the
+// dashboards no longer download the admin area, the photo background-removal
+// model or Stripe before they can show anything.
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
-
-// Coaching
-import { CoachingDirectory, CoachProfile, WhyCoaching } from "./pages/coaching";
-import CoachMatching from "./pages/coaching/CoachMatching";
-import CoachCompare from "./pages/coaching/CoachCompare";
-import CoachDashboard from "./pages/coaching/CoachDashboard";
-import CoachProfileEdit from "./pages/coaching/CoachProfileEdit";
-import CoachOnboarding from "./pages/coaching/CoachOnboarding";
-import OnboardRedirect from "./pages/coaching/OnboardRedirect";
-import CoachesAdmin from "./pages/admin/Coaches";
-
-// Core pages
-import About from "./pages/About";
-import Contact from "./pages/Contact";
-import Apply from "./pages/Apply";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
-import Pricing from "./pages/Pricing";
-import BookingSuccess from "./pages/BookingSuccess";
-import SessionRoom from "./pages/SessionRoom";
-import SessionTranscript from "./pages/SessionTranscript";
-import SubscriptionSuccess from "./pages/SubscriptionSuccess";
-import Onboarding from "./pages/Onboarding";
-import CoachSignup from "./pages/CoachSignup";
+import CoachDashboard from "./pages/coaching/CoachDashboard";
+
+import CoachesAdmin from "./pages/admin/Coaches";
+
+const CHUNK_RELOAD_KEY = "galoras_chunk_reload";
+
+// A deploy replaces the page files, so a tab opened before it asks for files
+// that no longer exist. Reload once to pick up the new version.
+function lazyPage(load: () => Promise<{ default: ComponentType }>) {
+  return lazy(() =>
+    load()
+      .then((mod) => {
+        sessionStorage.removeItem(CHUNK_RELOAD_KEY);
+        return mod;
+      })
+      .catch((err) => {
+        if (!sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
+          sessionStorage.setItem(CHUNK_RELOAD_KEY, "1");
+          window.location.reload();
+          return new Promise<never>(() => {});
+        }
+        throw err;
+      })
+  );
+}
+
+// Coaching
+const CoachingDirectory = lazyPage(() => import("./pages/coaching/CoachingDirectory"));
+const CoachProfile = lazyPage(() => import("./pages/coaching/CoachProfile"));
+const WhyCoaching = lazyPage(() => import("./pages/coaching/WhyCoaching"));
+const CoachMatching = lazyPage(() => import("./pages/coaching/CoachMatching"));
+const CoachCompare = lazyPage(() => import("./pages/coaching/CoachCompare"));
+const CoachProfileEdit = lazyPage(() => import("./pages/coaching/CoachProfileEdit"));
+const CoachOnboarding = lazyPage(() => import("./pages/coaching/CoachOnboarding"));
+const OnboardRedirect = lazyPage(() => import("./pages/coaching/OnboardRedirect"));
+
+// Core pages
+const About = lazyPage(() => import("./pages/About"));
+const Contact = lazyPage(() => import("./pages/Contact"));
+const Apply = lazyPage(() => import("./pages/Apply"));
+const Pricing = lazyPage(() => import("./pages/Pricing"));
+const BookingSuccess = lazyPage(() => import("./pages/BookingSuccess"));
+const SessionRoom = lazyPage(() => import("./pages/SessionRoom"));
+const SessionTranscript = lazyPage(() => import("./pages/SessionTranscript"));
+const SubscriptionSuccess = lazyPage(() => import("./pages/SubscriptionSuccess"));
+const Onboarding = lazyPage(() => import("./pages/Onboarding"));
+const CoachSignup = lazyPage(() => import("./pages/CoachSignup"));
 
 // Labs & Business
-import Labs from "./pages/Labs";
-import LabsArticle from "./pages/LabsArticle";
-import LabsWatch from "./pages/LabsWatch";
-import Enterprise from "./pages/business/Enterprise";
-import ForYou from "./pages/coaching/ForYou";
-import IsCoachingForMe from "./pages/coaching/IsCoachingForMe";
-import Payments from "./pages/legal/Payments";
+const Labs = lazyPage(() => import("./pages/Labs"));
+const LabsArticle = lazyPage(() => import("./pages/LabsArticle"));
+const LabsWatch = lazyPage(() => import("./pages/LabsWatch"));
+const Enterprise = lazyPage(() => import("./pages/business/Enterprise"));
+const ForYou = lazyPage(() => import("./pages/coaching/ForYou"));
+const IsCoachingForMe = lazyPage(() => import("./pages/coaching/IsCoachingForMe"));
+const Payments = lazyPage(() => import("./pages/legal/Payments"));
 
 // Admin
-import ImageGenerator from "./pages/admin/ImageGenerator";
-import CoachCutoutManager from "./pages/admin/CoachCutoutManager";
-import Applicants from "./pages/admin/Applicants";
-import CoachesList from "./pages/admin/CoachesList";
-import CoachEditorDetail from "./pages/admin/CoachEditorDetail";
-import Bookings from "@/pages/admin/Bookings";
-import ProductManager from "@/pages/admin/ProductManager";
-import Portal from "./pages/admin/Portal";
-import Leads from "./pages/admin/Leads";
-import CompleteRegistration from "./pages/CompleteRegistration";
+const ImageGenerator = lazyPage(() => import("./pages/admin/ImageGenerator"));
+const CoachCutoutManager = lazyPage(() => import("./pages/admin/CoachCutoutManager"));
+const Applicants = lazyPage(() => import("./pages/admin/Applicants"));
+const CoachesList = lazyPage(() => import("./pages/admin/CoachesList"));
+const CoachEditorDetail = lazyPage(() => import("./pages/admin/CoachEditorDetail"));
+const Bookings = lazyPage(() => import("@/pages/admin/Bookings"));
+const ProductManager = lazyPage(() => import("@/pages/admin/ProductManager"));
+const Portal = lazyPage(() => import("./pages/admin/Portal"));
+const Leads = lazyPage(() => import("./pages/admin/Leads"));
+const CompleteRegistration = lazyPage(() => import("./pages/CompleteRegistration"));
 
 // Legal pages
-import Terms from "./pages/legal/Terms";
-import Privacy from "./pages/legal/Privacy";
-import CookiePolicy from "./pages/legal/CookiePolicy";
-import CoachAgreement from "./pages/legal/CoachAgreement";
+const Terms = lazyPage(() => import("./pages/legal/Terms"));
+const Privacy = lazyPage(() => import("./pages/legal/Privacy"));
+const CookiePolicy = lazyPage(() => import("./pages/legal/CookiePolicy"));
+const CoachAgreement = lazyPage(() => import("./pages/legal/CoachAgreement"));
 
 const queryClient = new QueryClient();
 
@@ -132,6 +161,9 @@ function AppRoutes() {
   return (
     <>
     <ScrollToTop />
+    {/* Blank while a page's file downloads, as the route guard already is
+        while it checks the session. */}
+    <Suspense fallback={null}>
     <Routes>
           {/* Home */}
           <Route path="/" element={<Index />} />
@@ -311,6 +343,7 @@ function AppRoutes() {
           {/* Always last */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+    </Suspense>
     </>
   );
 }
