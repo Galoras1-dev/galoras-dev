@@ -38,9 +38,12 @@ export function usePageTracker() {
     if (!consent) return;
 
     const track = async () => {
+      // Only needs to know whether someone is logged in, so read the local
+      // session. getUser() went to the Auth server and held up the page.
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user;
 
       await supabase.from("site_visits").insert({
         visitor_id: getVisitorId(),

@@ -75,13 +75,28 @@ function ProtectedRoute({ children, requireAdmin = false }: { children: React.Re
 
   useEffect(() => {
     (async () => {
+      // The session already in the browser decides what to render, so the page
+      // no longer waits on the Auth server. getUser() held the auth lock for a
+      // full round trip and every other Supabase call queued behind it. The
+      // data itself is still protected by RLS, which checks the token on every
+      // request.
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) {
         setState("denied");
         return;
       }
+      // Still ask the Auth server whether the session is valid, in the
+      // background. Passing the token skips the auth lock, so this does not
+      // hold up the page's own queries. A revoked session is sent to /login as
+      // before; a network blip is not treated as a logout.
+      supabase.auth.getUser(session.access_token).then(({ data, error }) => {
+        if (!data.user && error?.status && error.status >= 400 && error.status < 500) {
+          setState("denied");
+        }
+      });
       if (requireAdmin) {
         const { data } = await supabase
           .from("user_roles")
