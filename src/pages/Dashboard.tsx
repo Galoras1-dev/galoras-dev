@@ -151,6 +151,12 @@ export default function Dashboard() {
       return data as Booking[];
     },
     enabled: !!user,
+    // In production session_bookings has no client_id column, so this query
+    // fails with a 400 on every load. The default three retries with back-off
+    // kept the skeleton on screen for about 8 seconds before showing the same
+    // empty list. An error the database returned (it has a code) will not go
+    // away on retry; a network error (no code) is still retried as before.
+    retry: (failureCount, error) => !(error as { code?: string })?.code && failureCount < 3,
   });
 
   // Cancel booking mutation — enforces a 24-hour notice window

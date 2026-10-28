@@ -51,8 +51,10 @@ export default function CoachDashboard() {
   const { data: user } = useQuery({
     queryKey: ['current-user'],
     queryFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      return user;
+      // ProtectedRoute has already checked the session, so read it locally
+      // instead of a second round trip to the Auth server.
+      const { data: { session } } = await supabase.auth.getSession();
+      return session?.user ?? null;
     },
   });
 
